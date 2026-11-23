@@ -18,6 +18,38 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { URL } = require("node:url");
 
+function loadLocalEnvFile() {
+  try {
+    const envPath = path.join(__dirname, ".env");
+    if (fs.existsSync(envPath)) {
+      const raw = fs.readFileSync(envPath, "utf8");
+      for (const line of raw.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eqIdx = trimmed.indexOf("=");
+        if (eqIdx > 0) {
+          const k = trimmed.slice(0, eqIdx).trim();
+          let v = trimmed.slice(eqIdx + 1).trim();
+          if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.slice(1, -1);
+          }
+          if (!process.env[k]) {
+            process.env[k] = v;
+          }
+        }
+      }
+    }
+  } catch (_e) {}
+}
+loadLocalEnvFile();
+
+const SUPABASE_URL = (
+  process.env.SUPABASE_URL || "https://qdsmiptuqkrnyfynnoxu.supabase.co"
+).trim().replace(/\/+$/, "");
+const SUPABASE_KEY = (
+  process.env.SUPABASE_KEY || "sb_publishable_NExQDC6cWPJXoxwHEm4Jug_zbYZA5rD"
+).trim();
+
 const ENV_ACCESSTRADE_KEY = (process.env.ACCESSTRADE_KEY || "").trim();
 const ALLOWED_ORIGIN = (process.env.ALLOWED_ORIGIN || "*").trim() || "*";
 const PORT = Number(process.env.PORT) || 3000;
@@ -189,6 +221,191 @@ function saveBridgeStateToDisk() {
 }
 
 loadBridgeStateFromDisk();
+
+async function supabaseFetch(subPath, options = {}) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+  const targetUrl = `${SUPABASE_URL}/rest/v1/${subPath.replace(/^\/+/, "")}`;
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
+  try {
+    const headers = {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    };
+    const res = await fetch(targetUrl, {
+      ...options,
+      headers,
+      signal: controller ? controller.signal : undefined
+    });
+    if (timer) clearTimeout(timer);
+    return res;
+  } catch (_e) {
+    if (timer) clearTimeout(timer);
+    return null;
+  }
+}
+
+async function getCtvsFromSupabase() {
+  try {
+    const res = await supabaseFetch("ctvs?select=*");
+    if (!res || !res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return null;
+    return rows.map((r) => ({
+      id: String(r.id || r.ref),
+      name: String(r.name || "").slice(0, 40),
+      ref: String(r.ref || "").toLowerCase(),
+      view: String(r.view_code || ""),
+      active: r.active !== false
+    }));
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function getCtvByViewCodeFromSupabase(viewCode) {
+  try {
+    const res = await supabaseFetch(`ctvs?view_code=eq.${encodeURIComponent(viewCode)}&select=*`);
+    if (!res || !res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      id: String(r.id || r.ref),
+      name: String(r.name || "").slice(0, 40),
+      ref: String(r.ref || "").toLowerCase(),
+      view: String(r.view_code || ""),
+      active: r.active !== false
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function getCtvByRefFromSupabase(ref) {
+  try {
+    const res = await supabaseFetch(`ctvs?ref=eq.${encodeURIComponent(ref)}&select=*`);
+    if (!res || !res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      id: String(r.id || r.ref),
+      name: String(r.name || "").slice(0, 40),
+      ref: String(r.ref || "").toLowerCase(),
+      view: String(r.view_code || ""),
+      active: r.active !== false
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function saveCtvsToSupabase(ctvList) {
+  if (!Array.isArray(ctvList) || ctvList.length === 0) return false;
+  try {
+    const rows = ctvList.map((c) => ({
+      id: String(c.id || c.ref),
+      name: String(c.name || "").slice(0, 40),
+      ref: String(c.ref || "").toLowerCase(),
+      view_code: String(c.view || ""),
+      active: c.active !== false,
+      updated_at: new Date().toISOString()
+    }));
+    const res = await supabaseFetch("ctvs", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify(rows)
+    });
+    return res && res.ok;
+  } catch (_e) {
+    return false;
+  }
+}
+
+async function getSettingsFromSupabase() {
+  try {
+    const res = await supabaseFetch("app_settings?key=eq.ctv_config&select=*");
+    if (!res || !res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    return rows[0].value;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function saveSettingsToSupabase(val) {
+  try {
+    const res = await supabaseFetch("app_settings", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({
+        key: "ctv_config",
+        value: val,
+        updated_at: new Date().toISOString()
+      })
+    });
+    return res && res.ok;
+  } catch (_e) {
+    return false;
+  }
+}
+
+async function getClicksFromSupabase() {
+  try {
+    const res = await supabaseFetch("ctv_clicks?select=*");
+    if (!res || !res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return null;
+    const map = {};
+    for (const r of rows) {
+      if (!r || !r.ref) continue;
+      map[r.ref] = {
+        total: Number(r.total) || 0,
+        byDay: r.by_day && typeof r.by_day === "object" ? r.by_day : {},
+        lastClickAt: r.last_click_at || ""
+      };
+    }
+    return map;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function recordClickInSupabase(ref) {
+  try {
+    const today = formatServerYmdGmt7(new Date());
+    const nowIso = new Date().toISOString();
+    const res = await supabaseFetch(`ctv_clicks?ref=eq.${encodeURIComponent(ref)}&select=*`);
+    let currentTotal = 0;
+    let currentByDay = {};
+    if (res && res.ok) {
+      const rows = await res.json();
+      if (Array.isArray(rows) && rows.length > 0) {
+        currentTotal = Number(rows[0].total) || 0;
+        currentByDay = rows[0].by_day && typeof rows[0].by_day === "object" ? rows[0].by_day : {};
+      }
+    }
+    const newTotal = currentTotal + 1;
+    currentByDay[today] = (Number(currentByDay[today]) || 0) + 1;
+    await supabaseFetch("ctv_clicks", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({
+        ref,
+        total: newTotal,
+        by_day: currentByDay,
+        last_click_at: nowIso,
+        updated_at: nowIso
+      })
+    });
+  } catch (_e) {
+    // ignore
+  }
+}
 
 function isValidDateYmd(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -1128,6 +1345,7 @@ function recordRealClick(ref) {
   };
   bridgeState.clickStats[ref] = updated;
   saveBridgeStateToDisk();
+  recordClickInSupabase(ref).catch(() => {});
   return updated;
 }
 
@@ -1326,7 +1544,7 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
   const leadRisks = policy.leadRisks || {};
 
   let sourceLeads = Array.isArray(bridgeState.syncedLeads) ? bridgeState.syncedLeads : [];
-  const effectiveKey = bridgeRuntimeKey || ENV_ACCESSTRADE_KEY;
+  const effectiveKey = bridgeRuntimeKey || ENV_ACCESSTRADE_KEY || (bridgeState && bridgeState.accessKey);
 
   if (bridgeState.mode === "real" && effectiveKey) {
     try {
@@ -1459,9 +1677,16 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const matchedCtv = bridgeState.ctvList.find(
+    let matchedCtv = bridgeState.ctvList.find(
       (c) => c && c.active !== false && String(c.ref || "").toLowerCase() === rawRef.toLowerCase()
     );
+    if (!matchedCtv) {
+      const dbCtv = await getCtvByRefFromSupabase(rawRef);
+      if (dbCtv && dbCtv.active) {
+        matchedCtv = dbCtv;
+        bridgeState.ctvList.push(dbCtv);
+      }
+    }
     if (!matchedCtv) {
       res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end("<!doctype html><html lang='vi'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Link tạm ngừng</title><body style='font-family:system-ui,sans-serif;padding:24px;max-width:480px;margin:0 auto'><h1>Link bán hàng chưa sẵn sàng</h1><p>Mã cộng tác viên này chưa được đồng bộ hoặc đã ngừng hoạt động. Vui lòng liên hệ người quản lý.</p></body></html>");
@@ -1497,7 +1722,54 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (reqMethod === "GET" && pathname === "/api/admin/bootstrap") {
+    let ctvList = bridgeState.ctvList;
+    let dbSettings = null;
+    try {
+      const dbCtvs = await getCtvsFromSupabase();
+      if (Array.isArray(dbCtvs) && dbCtvs.length > 0) {
+        ctvList = dbCtvs;
+        bridgeState.ctvList = dbCtvs;
+      }
+      const fetchedSettings = await getSettingsFromSupabase();
+      if (fetchedSettings) {
+        dbSettings = fetchedSettings;
+        if (fetchedSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...fetchedSettings.policy };
+        if (fetchedSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...fetchedSettings.ctvLinkConfig };
+        if (fetchedSettings.ctvShortLinks) bridgeState.ctvShortLinks = { ...bridgeState.ctvShortLinks, ...fetchedSettings.ctvShortLinks };
+        if (fetchedSettings.accessKey && !bridgeRuntimeKey) {
+          bridgeRuntimeKey = fetchedSettings.accessKey;
+        }
+      }
+      const dbClicks = await getClicksFromSupabase();
+      if (dbClicks) {
+        for (const [k, v] of Object.entries(dbClicks)) {
+          if (!bridgeState.clickStats[k] || (v.total > (bridgeState.clickStats[k].total || 0))) {
+            bridgeState.clickStats[k] = v;
+          }
+        }
+      }
+    } catch (_e) {}
+    sendJson(res, 200, {
+      ok: true,
+      ctvList,
+      settings: dbSettings,
+      clicksByRef: buildClicksSummaryMap()
+    });
+    return;
+  }
+
   if (reqMethod === "GET" && pathname === "/api/ctv-clicks") {
+    try {
+      const dbClicks = await getClicksFromSupabase();
+      if (dbClicks) {
+        for (const [k, v] of Object.entries(dbClicks)) {
+          if (!bridgeState.clickStats[k] || (v.total > (bridgeState.clickStats[k].total || 0))) {
+            bridgeState.clickStats[k] = v;
+          }
+        }
+      }
+    } catch (_e) {}
     sendJson(res, 200, {
       ok: true,
       serverTime: new Date().toISOString(),
@@ -1605,9 +1877,21 @@ const server = http.createServer(async (req, res) => {
             ? rawPolicy.leadRisks
             : {}
       },
-      syncedLeads: cleanLeads
+      syncedLeads: cleanLeads,
+      accessKey: bridgeRuntimeKey || (bridgeState && bridgeState.accessKey) || ""
     };
     saveBridgeStateToDisk();
+
+    // Đồng bộ lên Supabase ngầm
+    saveCtvsToSupabase(cleanCtvList).catch(() => {});
+    saveSettingsToSupabase({
+      mode: bridgeState.mode,
+      policy: bridgeState.policy,
+      ctvLinkConfig: bridgeState.ctvLinkConfig,
+      ctvShortLinks: bridgeState.ctvShortLinks,
+      accessKey: bridgeState.accessKey
+    }).catch(() => {});
+
     sendJson(res, 200, {
       ok: true,
       count: cleanCtvList.length,
@@ -1629,12 +1913,39 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const matchedCtv = bridgeState.ctvList.find(
+    let matchedCtv = bridgeState.ctvList.find(
       (c) => c && c.active && c.view && c.view === viewCode
     );
+
+    // Nếu bộ nhớ RAM chưa có (do Vercel cold-start hoặc chưa mở admin), đọc từ Supabase
+    if (!matchedCtv) {
+      const dbCtv = await getCtvByViewCodeFromSupabase(viewCode);
+      if (dbCtv && dbCtv.active) {
+        matchedCtv = dbCtv;
+        const existIdx = bridgeState.ctvList.findIndex((c) => c.ref === dbCtv.ref);
+        if (existIdx >= 0) {
+          bridgeState.ctvList[existIdx] = dbCtv;
+        } else {
+          bridgeState.ctvList.push(dbCtv);
+        }
+      }
+    }
+
     if (!matchedCtv) {
       sendJson(res, 404, { error: "Không tìm thấy hồ sơ CTV tương ứng." });
       return;
+    }
+
+    // Nếu policy chưa có hoặc accessKey trong RAM bị thiếu, lấy từ Supabase
+    if (!bridgeState.policy || !bridgeRuntimeKey) {
+      const dbSettings = await getSettingsFromSupabase();
+      if (dbSettings) {
+        if (dbSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettings.policy };
+        if (dbSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...dbSettings.ctvLinkConfig };
+        if (dbSettings.accessKey && !bridgeRuntimeKey) {
+          bridgeRuntimeKey = dbSettings.accessKey;
+        }
+      }
     }
 
     try {

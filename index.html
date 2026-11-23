@@ -4231,6 +4231,79 @@
           }
         }
 
+        function bootstrapFromCloud() {
+          try {
+            var proto = window.location && window.location.protocol;
+            if (proto !== "http:" && proto !== "https:") return Promise.resolve(false);
+            var baseUrl = state.serverUrl ? state.serverUrl.replace(/\/+$/, "") : window.location.origin;
+            var ep = baseUrl + "/api/admin/bootstrap";
+            return window
+              .fetch(ep, { method: "GET", cache: "no-store", headers: { Accept: "application/json" } })
+              .then(function (r) {
+                if (!r || !r.ok) return null;
+                return r.json().catch(function () { return null; });
+              })
+              .then(function (data) {
+                if (!data || !data.ok) return false;
+                var hasUpdates = false;
+                if (Array.isArray(data.ctvList) && data.ctvList.length > 0) {
+                  var map = new Map();
+                  for (var i = 0; i < state.ctvList.length; i++) {
+                    var localItem = state.ctvList[i];
+                    if (localItem && localItem.ref) map.set(localItem.ref, localItem);
+                  }
+                  for (var j = 0; j < data.ctvList.length; j++) {
+                    var cloudItem = data.ctvList[j];
+                    if (cloudItem && cloudItem.ref) {
+                      var existing = map.get(cloudItem.ref);
+                      map.set(cloudItem.ref, existing ? Object.assign({}, existing, cloudItem) : cloudItem);
+                    }
+                  }
+                  state.ctvList = Array.from(map.values());
+                  saveCtvListToStorage();
+                  hasUpdates = true;
+                }
+                if (data.settings && typeof data.settings === "object") {
+                  if (data.settings.policy && typeof data.settings.policy === "object") {
+                    var p = data.settings.policy;
+                    if (p.ownerName) state.ownerName = p.ownerName;
+                    if (p.ctvField) state.ctvField = p.ctvField;
+                    if (p.defaultRisk) state.defaultRisk = p.defaultRisk;
+                    if (p.atRates) state.atRates = Object.assign({}, state.atRates, p.atRates);
+                    if (p.ctvRates) state.ctvRates = Object.assign({}, state.ctvRates, p.ctvRates);
+                    if (p.leadRisks) state.leadRisks = Object.assign({}, state.leadRisks, p.leadRisks);
+                    savePolicyToStorage();
+                    hasUpdates = true;
+                  }
+                  if (data.settings.ctvLinkConfig && typeof data.settings.ctvLinkConfig === "object") {
+                    state.ctvLinkConfig = Object.assign({}, state.ctvLinkConfig, data.settings.ctvLinkConfig);
+                    saveCtvLinkConfigToStorage();
+                    hasUpdates = true;
+                  }
+                  if (data.settings.ctvShortLinks && typeof data.settings.ctvShortLinks === "object") {
+                    state.ctvShortLinks = Object.assign({}, state.ctvShortLinks, data.settings.ctvShortLinks);
+                    saveCtvShortLinksToStorage();
+                    hasUpdates = true;
+                  }
+                }
+                if (data.clicksByRef && typeof data.clicksByRef === "object") {
+                  state.ctvClicks = data.clicksByRef;
+                  hasUpdates = true;
+                }
+                if (hasUpdates) {
+                  if (!state.loading) renderOverview();
+                  renderCtvListOnly();
+                }
+                return true;
+              })
+              .catch(function () {
+                return false;
+              });
+          } catch (_ignoreBootErr) {
+            return Promise.resolve(false);
+          }
+        }
+
         async function loadData(options) {
           var fromSettingsSave = Boolean(options && options.fromSettingsSave);
           state.loading = true;
@@ -6776,6 +6849,7 @@
         bindEvents();
         switchTab("overview");
         loadData();
+        bootstrapFromCloud();
       })();
     </script>
   </body>
