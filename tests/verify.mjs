@@ -121,13 +121,13 @@ test("index.html pure logic functions work accurately (XSS, GMT+7, status, stats
     crypto: globalThis.crypto,
     localStorage: {
       getItem: (k) => (Object.prototype.hasOwnProperty.call(mockStore, k) ? mockStore[k] : null),
-      setItem: () => {}
+      setItem: () => { }
     }
   };
   const context = vm.createContext({
     window: mockWindow,
     document: {
-      documentElement: { setAttribute() {}, removeAttribute() {} },
+      documentElement: { setAttribute() { }, removeAttribute() { } },
       getElementById: () => ({ textContent: "", innerHTML: "", hidden: false, style: {} }),
       querySelectorAll: () => []
     },
@@ -410,7 +410,7 @@ test("index.html pure logic functions work accurately (XSS, GMT+7, status, stats
   assert.equal(
     api.buildCtvSalesLink(linkCfg, firstCtv.ref),
     "https://go.isclix.com/deep_link/4608706208340350795/6997817930567730686?url=https%3A%2F%2Fbank.vn%2Fthe%3Futm%3D1%26ref%3Da&sub2=" +
-      firstCtv.ref
+    firstCtv.ref
   );
 
   // Direct baseSalesLink preserves rk= and replaces sub2 cleanly
@@ -747,7 +747,7 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
         try {
           const r = await fetch(`http://127.0.0.1:${serverPort}/api/health`);
           if (r.ok) return resolve();
-        } catch {}
+        } catch { }
         if (Date.now() > deadline) return reject(new Error("server.js did not start in time"));
         setTimeout(poll, 50);
       }
@@ -1237,6 +1237,6 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     await new Promise((resolve) => mockAtServer.close(resolve));
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    } catch {}
+    } catch { }
   }
 });
