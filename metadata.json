@@ -1,0 +1,6 @@
+{
+  "name": "Dasboard Fin",
+  "description": "Dasboard Fin - Minh bạch - Rõ ràng. Theo dõi trạng thái hồ sơ tài chính và ngân hàng AccessTrade Việt Nam.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
