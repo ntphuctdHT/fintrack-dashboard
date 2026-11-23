@@ -903,10 +903,10 @@
     <main class="page-wrap" id="app-root">
       <header class="site-header">
         <div class="brand-row">
-          <div class="brand-logo" id="brand-logo" aria-hidden="true"></div>
+          <div class="brand-logo" id="brand-logo" aria-hidden="true" hidden></div>
           <div class="brand-meta">
-            <p class="brand-name" id="brand-name"></p>
-            <p class="brand-slogan" id="brand-slogan"></p>
+            <p class="brand-name" id="brand-name">Dasboard PUB</p>
+            <p class="brand-slogan" id="brand-slogan" hidden></p>
           </div>
         </div>
         <h1 class="page-title" id="page-title">Đang tải hồ sơ</h1>
@@ -1045,7 +1045,7 @@
         </div>
 
         <div class="footer-bottom-bar">
-          <span class="footer-brand">FinTrack Affiliate · Minh bạch & Bảo mật</span>
+          <span class="footer-brand">Dasboard PUB</span>
         </div>
       </footer>
     </main>
@@ -1059,8 +1059,8 @@
 
         // Thông tin thương hiệu của bạn
         const BRAND = {
-          name: "Tài Chính Việt",
-          slogan: "Minh bạch từng hồ sơ",
+          name: "Dasboard PUB",
+          slogan: "",
           logoDataUri: "", // Dán data:image/... nếu có logo riêng; để trống sẽ hiện chữ cái đầu
           zaloUrl: "https://zalo.me" // Thay bằng link Zalo của chủ, ví dụ https://zalo.me/0901234567
         };
@@ -1419,22 +1419,13 @@
           var sloganEl = document.getElementById("brand-slogan");
           var zaloEl = document.getElementById("btn-zalo-support");
 
-          if (nameEl) nameEl.textContent = BRAND.name;
-          if (sloganEl) sloganEl.textContent = BRAND.slogan;
-
+          if (nameEl) nameEl.textContent = BRAND.name || "Dasboard PUB";
+          if (sloganEl) {
+            sloganEl.textContent = "";
+            sloganEl.hidden = true;
+          }
           if (logoEl) {
-            logoEl.textContent = "";
-            if (typeof BRAND.logoDataUri === "string" && BRAND.logoDataUri.indexOf("data:image/") === 0) {
-              var img = document.createElement("img");
-              img.src = BRAND.logoDataUri;
-              img.alt = BRAND.name;
-              img.onerror = function () {
-                logoEl.textContent = getInitials(BRAND.name);
-              };
-              logoEl.appendChild(img);
-            } else {
-              logoEl.textContent = getInitials(BRAND.name);
-            }
+            logoEl.hidden = true;
           }
 
           if (zaloEl) {

@@ -3,12 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Dasboard Fin — Minh bạch - Rõ ràng</title>
+    <title>Dasboard PUB</title>
+    <!-- Dasboard Fin - Minh bạch - Rõ ràng -->
     <meta
       name="description"
-      content="Dasboard Fin - Minh bạch - Rõ ràng. Theo dõi trạng thái hồ sơ tài chính và ngân hàng AccessTrade Việt Nam."
+      content="Dasboard PUB - Theo dõi trạng thái hồ sơ tài chính và ngân hàng AccessTrade Việt Nam."
     />
-    <meta property="og:title" content="Dasboard Fin — Minh bạch - Rõ ràng" />
+    <meta property="og:title" content="Dasboard PUB" />
     <meta
       property="og:description"
       content="Theo dõi nhanh hồ sơ chờ duyệt, đã duyệt, đã đối soát và hoa hồng tài chính trên điện thoại."
@@ -1551,10 +1552,10 @@
       <header class="app-header">
         <div class="header-inner">
           <div class="brand">
-            <div class="brand-logo" id="brand-logo" aria-hidden="true">DF</div>
+            <div class="brand-logo" id="brand-logo" aria-hidden="true" hidden></div>
             <div class="brand-copy">
-              <p class="brand-name" id="brand-name">Dasboard Fin</p>
-              <p class="brand-slogan" id="brand-slogan">Minh bạch - Rõ ràng</p>
+              <p class="brand-name" id="brand-name">Dasboard PUB</p>
+              <p class="brand-slogan" id="brand-slogan" hidden></p>
             </div>
           </div>
           <button
@@ -2070,8 +2071,8 @@
               </p>
             </div>
             <div class="footer-meta-bar">
-              <span>© 2026 Dasboard Fin · Vận hành minh bạch</span>
-              <span>🔒 Dữ liệu lưu cục bộ an toàn</span>
+              <span>© 2026 Dasboard PUB</span>
+              <span>🔒 Dữ liệu lưu an toàn</span>
             </div>
           </footer>
         </div>
@@ -2159,9 +2160,9 @@
         "use strict";
 
         var BRAND = {
-          name: "Dasboard Fin",
-          slogan: "Minh bạch - Rõ ràng",
-          logoUrl: "" // Để trống sẽ hiển thị ô vuông bo góc chứa chữ cái đầu
+          name: "Dasboard PUB",
+          slogan: "",
+          logoUrl: ""
         };
 
         var STORAGE_KEY = "dasboard_fin_settings_v1";
@@ -3992,20 +3993,13 @@
           var sloganEl = document.getElementById("brand-slogan");
           var logoEl = document.getElementById("brand-logo");
 
-          nameEl.textContent = BRAND.name;
-          sloganEl.textContent = BRAND.slogan;
-
-          if (BRAND.logoUrl && isValidHttpUrl(BRAND.logoUrl)) {
-            logoEl.innerHTML = "";
-            var img = document.createElement("img");
-            img.src = BRAND.logoUrl;
-            img.alt = BRAND.name;
-            img.onerror = function () {
-              logoEl.textContent = getInitials(BRAND.name);
-            };
-            logoEl.appendChild(img);
-          } else {
-            logoEl.textContent = getInitials(BRAND.name);
+          if (nameEl) nameEl.textContent = BRAND.name || "Dasboard PUB";
+          if (sloganEl) {
+            sloganEl.textContent = "";
+            sloganEl.hidden = true;
+          }
+          if (logoEl) {
+            logoEl.hidden = true;
           }
         }
 
@@ -5806,6 +5800,10 @@
                   escapeHtml(ctv.id) +
                   '">Cho làm lại</button>';
               }
+              html +=
+                '<button type="button" class="secondary-btn ctv-danger-btn" data-ctv-action="delete" data-ctv-id="' +
+                escapeHtml(ctv.id) +
+                '">Xoá CTV</button>';
 
               html += "</div></div></div>";
             }
@@ -6707,6 +6705,38 @@
                 renderLeads();
                 syncCtvBridgeToServer();
                 showToast("success", "Đã bật lại " + targetCtv.name + " và tạo mã xem mới.");
+                return;
+              }
+
+              if (action === "delete") {
+                var okDelete = await openConfirmDialog(
+                  "Xoá CTV vĩnh viễn",
+                  "Bạn có chắc chắn muốn xoá hoàn toàn CTV " +
+                    targetCtv.name +
+                    " (" +
+                    targetCtv.ref +
+                    ")? Toàn bộ liên kết và mã xem của CTV này sẽ bị xoá khỏi hệ thống."
+                );
+                if (!okDelete) return;
+                state.ctvList = state.ctvList.filter(function (c) {
+                  return c && c.id !== ctvId && c.ref !== targetCtv.ref;
+                });
+                saveCtvListToStorage();
+                renderCtvListOnly();
+                renderLeads();
+                syncCtvBridgeToServer();
+                try {
+                  var epDel =
+                    (state.serverUrl ? state.serverUrl.replace(/\/+$/, "") : window.location.origin) +
+                    "/api/ctv-bridge/delete";
+                  window.fetch(epDel, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ctvId: ctvId, ref: targetCtv.ref })
+                  }).catch(function () {});
+                } catch (_e) {}
+                showToast("success", "Đã xoá vĩnh viễn CTV " + targetCtv.name + ".");
+                return;
               }
             });
           }

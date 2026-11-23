@@ -1882,21 +1882,42 @@ const server = http.createServer(async (req, res) => {
     };
     saveBridgeStateToDisk();
 
-    // Đồng bộ lên Supabase ngầm
-    saveCtvsToSupabase(cleanCtvList).catch(() => {});
-    saveSettingsToSupabase({
-      mode: bridgeState.mode,
-      policy: bridgeState.policy,
-      ctvLinkConfig: bridgeState.ctvLinkConfig,
-      ctvShortLinks: bridgeState.ctvShortLinks,
-      accessKey: bridgeState.accessKey
-    }).catch(() => {});
+    // Đồng bộ lên Supabase ngầm khi ở chế độ dữ liệu thật
+    if (bridgeState.mode === "real") {
+      saveCtvsToSupabase(cleanCtvList).catch(() => {});
+      saveSettingsToSupabase({
+        mode: bridgeState.mode,
+        policy: bridgeState.policy,
+        ctvLinkConfig: bridgeState.ctvLinkConfig,
+        ctvShortLinks: bridgeState.ctvShortLinks,
+        accessKey: bridgeState.accessKey
+      }).catch(() => {});
+    }
 
     sendJson(res, 200, {
       ok: true,
       count: cleanCtvList.length,
       clicksByRef: buildClicksSummaryMap()
     });
+    return;
+  }
+
+  if (reqMethod === "POST" && pathname === "/api/ctv-bridge/delete") {
+    let body = {};
+    try {
+      body = await readJsonBody(req, 16384);
+    } catch (_e) {}
+    const ctvId = String(body.ctvId || body.id || "").trim();
+    const ref = String(body.ref || "").trim();
+    if (ctvId || ref) {
+      bridgeState.ctvList = bridgeState.ctvList.filter((c) => c && c.id !== ctvId && c.ref !== ref);
+      saveBridgeStateToDisk();
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        if (ctvId) supabaseFetch(`ctvs?id=eq.${encodeURIComponent(ctvId)}`, { method: "DELETE" }).catch(() => {});
+        if (ref) supabaseFetch(`ctvs?ref=eq.${encodeURIComponent(ref)}`, { method: "DELETE" }).catch(() => {});
+      }
+    }
+    sendJson(res, 200, { ok: true, count: bridgeState.ctvList.length });
     return;
   }
 
