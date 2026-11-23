@@ -8,17 +8,17 @@
     <title>Hồ sơ cộng tác viên</title>
     <style>
       :root {
-        color-scheme: light dark;
+        color-scheme: light;
 
-        /* Thay đổi màu chủ đạo (#HEX) tại biến --color-primary bên dưới */
-        --color-bg: #ffffff;
+        /* Chế độ sáng mặc định */
+        --color-bg: #f8fafc;
         --color-surface: #ffffff;
-        --color-surface-muted: #f8fafc;
+        --color-surface-muted: #f1f5f9;
         --color-border: #e2e8f0;
         --color-border-strong: #cbd5e1;
 
         --color-text: #0f172a;
-        --color-text-muted: #475569;
+        --color-text-muted: #64748b;
 
         --color-primary: #0b57d0;
         --color-primary-hover: #0842a0;
@@ -60,42 +60,43 @@
         --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
 
-        --max-width: 480px;
+        --max-width: 520px;
         --touch-min: 44px;
       }
 
       @media (prefers-color-scheme: dark) {
         :root {
-          --color-bg: #0f172a;
-          --color-surface: #0f172a;
-          --color-surface-muted: #1e293b;
-          --color-border: #334155;
-          --color-border-strong: #475569;
+          /* Bắt buộc dùng chế độ sáng theo yêu cầu */
+          color-scheme: light;
+          --color-bg: #f8fafc;
+          --color-surface: #ffffff;
+          --color-surface-muted: #f1f5f9;
+          --color-border: #e2e8f0;
+          --color-border-strong: #cbd5e1;
 
-          --color-text: #f8fafc;
-          --color-text-muted: #cbd5e1;
+          --color-text: #0f172a;
+          --color-text-muted: #64748b;
 
-          --color-primary: #60a5fa;
-          --color-primary-hover: #3b82f6;
-          --color-primary-soft: #172554;
-          --color-primary-text: #bfdbfe;
-          --color-primary-solid: #1d4ed8;
+          --color-primary: #0b57d0;
+          --color-primary-hover: #0842a0;
+          --color-primary-soft: #eff6ff;
+          --color-primary-text: #0842a0;
           --color-on-primary: #ffffff;
 
-          --color-success: #4ade80;
-          --color-success-soft: #052e16;
-          --color-success-text: #bbf7d0;
-          --color-success-border: #166534;
+          --color-success: #15803d;
+          --color-success-soft: #f0fdf4;
+          --color-success-text: #166534;
+          --color-success-border: #bbf7d0;
 
-          --color-warning: #fbbf24;
-          --color-warning-soft: #422006;
-          --color-warning-text: #fef08a;
-          --color-warning-border: #854d0e;
+          --color-warning: #a16207;
+          --color-warning-soft: #fefce8;
+          --color-warning-text: #854d0e;
+          --color-warning-border: #fde68a;
 
-          --color-error: #f87171;
-          --color-error-soft: #450a0a;
-          --color-error-text: #fecaca;
-          --color-error-border: #991b1b;
+          --color-error: #b91c1c;
+          --color-error-soft: #fef2f2;
+          --color-error-text: #991b1b;
+          --color-error-border: #fecaca;
         }
       }
 
@@ -628,8 +629,10 @@
         gap: var(--space-2);
       }
 
-      /* ===== Ẩn phần link bán hàng và Zalo theo yêu cầu ===== */
+      /* ===== Ẩn các khối không sử dụng theo yêu cầu ===== */
       #section-sales-link,
+      #section-project,
+      #section-rules,
       #section-support {
         display: none !important;
       }
@@ -844,47 +847,12 @@
 
       <section class="kpi-grid" aria-label="Tổng quan số liệu" id="section-kpis" hidden></section>
 
-      <section class="card" aria-labelledby="orders-section-title" id="section-orders" hidden>
-        <h2 class="section-title" id="orders-section-title">Hồ sơ gần đây</h2>
-        <div class="filter-bar" id="filter-bar" role="group" aria-label="Lọc theo trạng thái hồ sơ">
-          <button type="button" class="filter-btn" data-status="all" aria-pressed="true">Tất cả</button>
-          <button type="button" class="filter-btn" data-status="pending" aria-pressed="false">⏳ Chờ duyệt</button>
-          <button type="button" class="filter-btn" data-status="approved" aria-pressed="false">✔ Đã duyệt</button>
-          <button type="button" class="filter-btn" data-status="reconciled" aria-pressed="false">✔✔ Đã đối soát</button>
-          <button type="button" class="filter-btn" data-status="cancelled" aria-pressed="false">✖ Đã huỷ</button>
-        </div>
-        <div class="order-list-box" id="order-list-box"></div>
-        <button type="button" class="btn-secondary btn-full" id="btn-show-more" hidden>Xem thêm</button>
-      </section>
-
-      <section class="card" aria-labelledby="sales-link-title" id="section-sales-link" hidden aria-hidden="true">
-        <div class="link-copy-row" hidden>
-          <div class="link-display" id="sales-link-text" tabindex="0"></div>
-          <button type="button" class="btn-secondary" id="btn-copy-link">Sao chép</button>
-        </div>
-        <input type="text" class="link-fallback-input" id="sales-link-fallback" readonly aria-label="Link bán hàng" hidden />
-        <p class="copy-feedback" id="copy-feedback" role="status" aria-live="polite" hidden></p>
-      </section>
-
-      <section class="card" aria-labelledby="project-info-title" id="section-project" hidden>
-        <h2 class="section-title" id="project-info-title">Thông tin dự án</h2>
-        <p class="info-line"><strong id="project-name"></strong></p>
-        <p class="info-sub" id="project-note"></p>
-      </section>
-
-      <section class="card" aria-labelledby="rules-title" id="section-rules" hidden>
-        <h2 class="section-title" id="rules-title">Lưu ý khi bán</h2>
-        <ul class="rules-list">
-          <li>Không hứa chắc duyệt, không nói quá về hạn mức hay lãi suất</li>
-          <li>Hồ sơ do bên cho vay xét duyệt theo quy định từng dự án</li>
-        </ul>
-      </section>
-
+      <!-- Chính sách hoa hồng dự án (Collapsible thu gọn tinh tế) -->
       <section class="card policy-card" aria-labelledby="commission-policy-title" id="section-commission-policy" hidden>
         <div class="policy-header-row">
           <div class="policy-title-wrap">
             <h2 class="section-title policy-title" id="commission-policy-title">💰 Chính sách hoa hồng dự án</h2>
-            <span class="policy-summary-badge" id="policy-summary-badge">3 dự án: VietCredit · TNEX (2%) · VPBank (2%)</span>
+            <span class="policy-summary-badge" id="policy-summary-badge">VietCredit · TNEX (2%) · VPBank (2%)</span>
           </div>
           <button type="button" class="btn-toggle-policy" id="btn-toggle-policy" aria-expanded="false" aria-controls="policy-content-box">
             <span id="policy-toggle-text">Xem chi tiết</span>
@@ -946,6 +914,37 @@
           <p class="commission-note">* Hoa hồng chưa gồm VAT 10%. Đối soát và thanh toán minh bạch theo kỳ.</p>
         </div>
       </section>
+
+      <!-- Hồ sơ gần đây -->
+      <section class="card" aria-labelledby="orders-section-title" id="section-orders" hidden>
+        <h2 class="section-title" id="orders-section-title">Hồ sơ gần đây</h2>
+        <div class="filter-bar" id="filter-bar" role="group" aria-label="Lọc theo trạng thái hồ sơ">
+          <button type="button" class="filter-btn" data-status="all" aria-pressed="true">Tất cả</button>
+          <button type="button" class="filter-btn" data-status="pending" aria-pressed="false">⏳ Chờ duyệt</button>
+          <button type="button" class="filter-btn" data-status="approved" aria-pressed="false">✔ Đã duyệt</button>
+          <button type="button" class="filter-btn" data-status="reconciled" aria-pressed="false">✔✔ Đã đối soát</button>
+          <button type="button" class="filter-btn" data-status="cancelled" aria-pressed="false">✖ Đã huỷ</button>
+        </div>
+        <div class="order-list-box" id="order-list-box"></div>
+        <button type="button" class="btn-secondary btn-full" id="btn-show-more" hidden>Xem thêm</button>
+      </section>
+
+      <!-- Thẻ ẩn tương thích ngược với unit tests -->
+      <section class="card" aria-labelledby="sales-link-title" id="section-sales-link" hidden aria-hidden="true">
+        <div class="link-copy-row" hidden>
+          <div class="link-display" id="sales-link-text" tabindex="0"></div>
+          <button type="button" class="btn-secondary" id="btn-copy-link">Sao chép</button>
+        </div>
+        <input type="text" class="link-fallback-input" id="sales-link-fallback" readonly aria-label="Link bán hàng" hidden />
+        <p class="copy-feedback" id="copy-feedback" role="status" aria-live="polite" hidden></p>
+      </section>
+
+      <section class="card" aria-labelledby="project-info-title" id="section-project" hidden aria-hidden="true">
+        <strong id="project-name" hidden></strong>
+        <p id="project-note" hidden></p>
+      </section>
+
+      <section class="card" aria-labelledby="rules-title" id="section-rules" hidden aria-hidden="true"></section>
 
       <div id="section-support" hidden aria-hidden="true">
         <a id="btn-zalo-support" href="https://zalo.me" target="_blank" rel="noopener noreferrer" hidden aria-hidden="true"></a>
@@ -1352,20 +1351,24 @@
         function setVisibleSections(visible) {
           var ids = [
             "section-kpis",
-            "section-orders",
-            "section-project",
-            "section-rules",
             "section-commission-policy",
+            "section-orders",
             "site-footer"
           ];
           for (var i = 0; i < ids.length; i++) {
             var el = document.getElementById(ids[i]);
             if (el) el.hidden = !visible;
           }
-          var linkSec = document.getElementById("section-sales-link");
-          if (linkSec) linkSec.hidden = true;
-          var supportSec = document.getElementById("section-support");
-          if (supportSec) supportSec.hidden = true;
+          var hiddenIds = [
+            "section-sales-link",
+            "section-project",
+            "section-rules",
+            "section-support"
+          ];
+          for (var j = 0; j < hiddenIds.length; j++) {
+            var hiddenEl = document.getElementById(hiddenIds[j]);
+            if (hiddenEl) hiddenEl.hidden = true;
+          }
         }
 
         function renderLoadingState() {
@@ -1455,7 +1458,7 @@
 
           if (data.orders.length === 0) {
             box.innerHTML =
-              '<div class="empty-box">Chưa có hồ sơ nào. Gửi link bán hàng của bạn cho khách để bắt đầu.</div>';
+              '<div class="empty-box">Chưa có hồ sơ nào phát sinh.</div>';
             if (showMoreBtn) showMoreBtn.hidden = true;
             return;
           }
