@@ -1361,17 +1361,27 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
     if (String(subs[ctvField] || "").trim() !== ctv.ref) continue;
 
     const status = mapViewOrderStatus(lead.statusKey);
-    const riskKey =
-      normalizeRiskTier(leadRisks[lead.conversionId]) ||
-      normalizeRiskTier(lead.apiRiskLevel) ||
-      defaultRisk;
-    const atRate = Number(atRates[riskKey]) > 0 ? Number(atRates[riskKey]) : DEFAULT_AT_RATES[riskKey];
-    const ctvRate = Number(ctvRates[riskKey]) >= 0 ? Number(ctvRates[riskKey]) : DEFAULT_CTV_RATES[riskKey];
+    const campUpper = String(lead.campaignName || "").toUpperCase();
 
-    const ctvComm =
-      status === "cancelled"
-        ? 0
-        : Math.round((Number(lead.commission) || 0) * (ctvRate / atRate));
+    let ctvComm = 0;
+    if (status !== "cancelled") {
+      if (campUpper.includes("TNEX")) {
+        // Dự án 1: TNEX - Hoa hồng CTV 2% (Tỷ lệ AT chuẩn 2.5%)
+        ctvComm = Math.round((Number(lead.commission) || 0) * (2.0 / 2.5));
+      } else if (campUpper.includes("VPBANK") || campUpper.includes("VP BANK")) {
+        // Dự án 2: VPBank - Hoa hồng CTV 2% (Tỷ lệ AT chuẩn 2.5%)
+        ctvComm = Math.round((Number(lead.commission) || 0) * (2.0 / 2.5));
+      } else {
+        // Dự án VietCredit & mặc định: Tính theo mức rủi ro hồ sơ
+        const riskKey =
+          normalizeRiskTier(leadRisks[lead.conversionId]) ||
+          normalizeRiskTier(lead.apiRiskLevel) ||
+          defaultRisk;
+        const atRate = Number(atRates[riskKey]) > 0 ? Number(atRates[riskKey]) : DEFAULT_AT_RATES[riskKey];
+        const ctvRate = Number(ctvRates[riskKey]) >= 0 ? Number(ctvRates[riskKey]) : DEFAULT_CTV_RATES[riskKey];
+        ctvComm = Math.round((Number(lead.commission) || 0) * (ctvRate / atRate));
+      }
+    }
 
     totals.total += 1;
     totals[status] += 1;

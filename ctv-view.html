@@ -628,42 +628,174 @@
         gap: var(--space-2);
       }
 
-      /* ===== Bảng chính sách hoa hồng ===== */
-      .commission-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: var(--text-sm);
-        margin-top: var(--space-3);
+      /* ===== Ẩn phần link bán hàng và Zalo theo yêu cầu ===== */
+      #section-sales-link,
+      #section-support {
+        display: none !important;
       }
 
-      .commission-table th,
-      .commission-table td {
-        padding: var(--space-2) var(--space-3);
-        text-align: left;
-        border-bottom: 1px solid var(--color-border);
+      /* ===== Khối chính sách hoa hồng tinh tế (Collapsible) ===== */
+      .policy-card {
+        padding: var(--space-3) var(--space-4);
       }
 
-      .commission-table thead th {
+      .policy-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        flex-wrap: wrap;
+      }
+
+      .policy-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        flex-wrap: wrap;
+      }
+
+      .policy-title {
+        font-size: var(--text-base);
+        margin: 0;
+      }
+
+      .policy-summary-badge {
         font-size: var(--text-xs);
-        font-weight: 700;
         color: var(--color-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
         background-color: var(--color-surface-muted);
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
       }
 
-      .commission-table tbody tr:last-child td {
-        border-bottom: none;
+      .btn-toggle-policy {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        font-size: var(--text-xs);
+        font-weight: 600;
+        color: var(--color-primary);
+        background-color: var(--color-surface-muted);
+        border: 1px solid var(--color-border-strong);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: background-color 0.15s ease;
       }
 
-      .commission-table tbody tr:hover {
+      .btn-toggle-policy:hover {
+        background-color: var(--color-border);
+      }
+
+      .policy-chevron {
+        font-size: var(--text-xs);
+        display: inline-block;
+      }
+
+      .policy-content-box {
+        margin-top: var(--space-3);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        border-top: 1px solid var(--color-border);
+        padding-top: var(--space-3);
+      }
+
+      .projects-policy-grid {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+
+      .project-policy-card {
         background-color: var(--color-surface-muted);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        padding: var(--space-2) var(--space-3);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .project-policy-top {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .project-tag {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .tag-loan {
+        background-color: rgba(59, 130, 246, 0.15);
+        color: #3b82f6;
+      }
+
+      .tag-bank {
+        background-color: rgba(168, 85, 247, 0.15);
+        color: #a855f7;
+      }
+
+      .tag-card {
+        background-color: rgba(234, 179, 8, 0.15);
+        color: #ca8a04;
+      }
+
+      .project-name {
+        font-size: var(--text-sm);
+        color: var(--color-text);
+      }
+
+      .project-policy-sub {
+        margin: 0;
+        font-size: var(--text-xs);
+        color: var(--color-text-muted);
+      }
+
+      .risk-tiers-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+
+      .risk-tier-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background-color: var(--color-surface);
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+      }
+
+      .fixed-tier-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-top: 2px;
+      }
+
+      .fixed-rate-label {
+        font-size: var(--text-xs);
+        color: var(--color-text-muted);
+      }
+
+      .rate-highlight {
+        font-size: var(--text-base);
+        font-weight: 700;
+        color: var(--color-primary);
       }
 
       .rate-badge {
         display: inline-block;
         font-weight: 700;
-        font-size: var(--text-base);
+        font-size: var(--text-sm);
         color: var(--color-primary);
       }
 
@@ -671,7 +803,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 2px 8px;
+        padding: 1px 6px;
         border-radius: 999px;
         font-size: var(--text-xs);
         font-weight: 600;
@@ -725,20 +857,12 @@
         <button type="button" class="btn-secondary btn-full" id="btn-show-more" hidden>Xem thêm</button>
       </section>
 
-      <section class="card" aria-labelledby="sales-link-title" id="section-sales-link" hidden>
-        <h2 class="section-title" id="sales-link-title">Link bán hàng của tôi</h2>
-        <div class="link-copy-row">
+      <section class="card" aria-labelledby="sales-link-title" id="section-sales-link" hidden aria-hidden="true">
+        <div class="link-copy-row" hidden>
           <div class="link-display" id="sales-link-text" tabindex="0"></div>
           <button type="button" class="btn-secondary" id="btn-copy-link">Sao chép</button>
         </div>
-        <input
-          type="text"
-          class="link-fallback-input"
-          id="sales-link-fallback"
-          readonly
-          aria-label="Link bán hàng để sao chép thủ công"
-          hidden
-        />
+        <input type="text" class="link-fallback-input" id="sales-link-fallback" readonly aria-label="Link bán hàng" hidden />
         <p class="copy-feedback" id="copy-feedback" role="status" aria-live="polite" hidden></p>
       </section>
 
@@ -751,39 +875,80 @@
       <section class="card" aria-labelledby="rules-title" id="section-rules" hidden>
         <h2 class="section-title" id="rules-title">Lưu ý khi bán</h2>
         <ul class="rules-list">
-          <li>Dùng đúng link của mình, không cắt hay sửa link</li>
           <li>Không hứa chắc duyệt, không nói quá về hạn mức hay lãi suất</li>
-          <li>Hồ sơ do bên cho vay xét duyệt</li>
+          <li>Hồ sơ do bên cho vay xét duyệt theo quy định từng dự án</li>
         </ul>
       </section>
 
-      <section class="card" aria-labelledby="commission-policy-title" id="section-commission-policy" hidden>
-        <h2 class="section-title" id="commission-policy-title">💰 Chính sách hoa hồng CTV</h2>
-        <table class="commission-table" aria-label="Bảng tỷ lệ hoa hồng theo mức rủi ro">
-          <thead>
-            <tr>
-              <th>Phân loại khách hàng</th>
-              <th>Mức rủi ro</th>
-              <th>Tỷ lệ hoa hồng (chưa VAT)</th>
-            </tr>
-          </thead>
-          <tbody id="commission-policy-rows">
-            <!-- Được render bởi JS -->
-          </tbody>
-        </table>
-        <p class="commission-note">* Hoa hồng được tính dựa trên mức rủi ro do chủ đánh giá. Chưa bao gồm VAT 10%.</p>
+      <section class="card policy-card" aria-labelledby="commission-policy-title" id="section-commission-policy" hidden>
+        <div class="policy-header-row">
+          <div class="policy-title-wrap">
+            <h2 class="section-title policy-title" id="commission-policy-title">💰 Chính sách hoa hồng dự án</h2>
+            <span class="policy-summary-badge" id="policy-summary-badge">3 dự án: VietCredit · TNEX (2%) · VPBank (2%)</span>
+          </div>
+          <button type="button" class="btn-toggle-policy" id="btn-toggle-policy" aria-expanded="false" aria-controls="policy-content-box">
+            <span id="policy-toggle-text">Xem chi tiết</span>
+            <span class="policy-chevron" id="policy-chevron">▾</span>
+          </button>
+        </div>
+
+        <div class="policy-content-box" id="policy-content-box" hidden>
+          <div class="projects-policy-grid">
+            <!-- Dự án 1: VietCredit -->
+            <div class="project-policy-card">
+              <div class="project-policy-top">
+                <span class="project-tag tag-loan">Vay tín chấp</span>
+                <strong class="project-name">Tin Vay VietCredit</strong>
+              </div>
+              <p class="project-policy-sub">Tỷ lệ theo phân loại rủi ro khách hàng:</p>
+              <div class="risk-tiers-row">
+                <div class="risk-tier-item">
+                  <span class="risk-tag risk-tag-low">Thấp (Low)</span>
+                  <span class="rate-badge" id="rate-vietcredit-low">1,80%</span>
+                </div>
+                <div class="risk-tier-item">
+                  <span class="risk-tag risk-tag-medium">TB (Medium)</span>
+                  <span class="rate-badge" id="rate-vietcredit-medium">1,28%</span>
+                </div>
+                <div class="risk-tier-item">
+                  <span class="risk-tag risk-tag-high">Cao (High)</span>
+                  <span class="rate-badge" id="rate-vietcredit-high">1,00%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dự án 2: TNEX -->
+            <div class="project-policy-card">
+              <div class="project-policy-top">
+                <span class="project-tag tag-bank">Ngân hàng số</span>
+                <strong class="project-name">TNEX</strong>
+              </div>
+              <p class="project-policy-sub">Mở tài khoản thanh toán / eKYC</p>
+              <div class="fixed-tier-row">
+                <span class="fixed-rate-label">Hoa hồng CTV:</span>
+                <span class="rate-highlight">2,00%</span>
+              </div>
+            </div>
+
+            <!-- Dự án 3: VPBank -->
+            <div class="project-policy-card">
+              <div class="project-policy-top">
+                <span class="project-tag tag-card">Thẻ & Tài khoản</span>
+                <strong class="project-name">VPBank</strong>
+              </div>
+              <p class="project-policy-sub">Mở thẻ tín dụng / Mở tài khoản VPBank NEO</p>
+              <div class="fixed-tier-row">
+                <span class="fixed-rate-label">Hoa hồng CTV:</span>
+                <span class="rate-highlight">2,00%</span>
+              </div>
+            </div>
+          </div>
+          <p class="commission-note">* Hoa hồng chưa gồm VAT 10%. Đối soát và thanh toán minh bạch theo kỳ.</p>
+        </div>
       </section>
 
-      <div id="section-support" hidden>
-        <a
-          class="btn-primary"
-          id="btn-zalo-support"
-          href="https://zalo.me"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Nhắn Zalo cho chủ
-        </a>
+      <div id="section-support" hidden aria-hidden="true">
+        <a id="btn-zalo-support" href="https://zalo.me" target="_blank" rel="noopener noreferrer" hidden aria-hidden="true"></a>
       </div>
 
       <footer class="site-footer" id="site-footer" hidden>
@@ -1191,17 +1356,16 @@
             "section-project",
             "section-rules",
             "section-commission-policy",
-            "section-support",
             "site-footer"
           ];
           for (var i = 0; i < ids.length; i++) {
             var el = document.getElementById(ids[i]);
             if (el) el.hidden = !visible;
           }
-          if (!visible) {
-            var linkSec = document.getElementById("section-sales-link");
-            if (linkSec) linkSec.hidden = true;
-          }
+          var linkSec = document.getElementById("section-sales-link");
+          if (linkSec) linkSec.hidden = true;
+          var supportSec = document.getElementById("section-support");
+          if (supportSec) supportSec.hidden = true;
         }
 
         function renderLoadingState() {
@@ -1408,41 +1572,22 @@
 
           renderOrdersList();
 
-          // ===== Render bảng chính sách hoa hồng =====
+          // ===== Render chính sách hoa hồng =====
           var commPolicySec = document.getElementById("section-commission-policy");
-          var commPolicyRows = document.getElementById("commission-policy-rows");
-          if (commPolicySec && commPolicyRows) {
-            var policy = data.commissionPolicy;
-            var tiers = [
-              { key: "low",    label: "Low",    riskLabel: "Thấp",        tagCls: "risk-tag-low",    rate: policy ? policy.low    : 1.80 },
-              { key: "medium", label: "Medium", riskLabel: "Trung bình",  tagCls: "risk-tag-medium", rate: policy ? policy.medium : 1.28 },
-              { key: "high",   label: "High",   riskLabel: "Cao",         tagCls: "risk-tag-high",   rate: policy ? policy.high   : 1.00 }
-            ];
-            commPolicyRows.innerHTML = tiers.map(function (t) {
-              var rateStr = Number(t.rate).toFixed(2).replace(".", ",") + "%";
-              return (
-                "<tr>" +
-                "<td>" + escapeHtml(t.label) + "</td>" +
-                "<td><span class=\"risk-tag " + escapeHtml(t.tagCls) + "\">" + escapeHtml(t.riskLabel) + "</span></td>" +
-                "<td><span class=\"rate-badge\">" + escapeHtml(rateStr) + "</span></td>" +
-                "</tr>"
-              );
-            }).join("");
+          if (commPolicySec) {
             commPolicySec.hidden = false;
+            if (data && data.commissionPolicy) {
+              var rLow = document.getElementById("rate-vietcredit-low");
+              var rMed = document.getElementById("rate-vietcredit-medium");
+              var rHigh = document.getElementById("rate-vietcredit-high");
+              if (rLow) rLow.textContent = Number(data.commissionPolicy.low).toFixed(2).replace(".", ",") + "%";
+              if (rMed) rMed.textContent = Number(data.commissionPolicy.medium).toFixed(2).replace(".", ",") + "%";
+              if (rHigh) rHigh.textContent = Number(data.commissionPolicy.high).toFixed(2).replace(".", ",") + "%";
+            }
           }
 
           if (linkSec) {
-            if (data.shortLink) {
-              linkSec.hidden = false;
-              if (linkTextEl) linkTextEl.textContent = data.shortLink;
-              if (linkFallbackEl) {
-                linkFallbackEl.value = data.shortLink;
-                linkFallbackEl.hidden = true;
-              }
-              if (copyFeedbackEl) copyFeedbackEl.hidden = true;
-            } else {
-              linkSec.hidden = true;
-            }
+            linkSec.hidden = true;
           }
 
           if (projectNameEl) projectNameEl.textContent = data.project.name;
@@ -1667,6 +1812,21 @@
           var retryBtn = document.getElementById("btn-retry");
           if (retryBtn) {
             retryBtn.addEventListener("click", loadViewData);
+          }
+
+          var policyToggleBtn = document.getElementById("btn-toggle-policy");
+          if (policyToggleBtn) {
+            policyToggleBtn.addEventListener("click", function () {
+              var box = document.getElementById("policy-content-box");
+              var txt = document.getElementById("policy-toggle-text");
+              var chevron = document.getElementById("policy-chevron");
+              if (!box) return;
+              var isHidden = box.hidden;
+              box.hidden = !isHidden;
+              policyToggleBtn.setAttribute("aria-expanded", String(isHidden));
+              if (txt) txt.textContent = isHidden ? "Thu gọn" : "Xem chi tiết";
+              if (chevron) chevron.textContent = isHidden ? "▴" : "▾";
+            });
           }
 
           if (document && typeof document.addEventListener === "function") {

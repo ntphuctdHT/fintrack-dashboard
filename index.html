@@ -2382,6 +2382,16 @@
           if (!Number.isFinite(atRate) || atRate <= 0) atRate = DEFAULT_AT_RATES[riskKey];
           if (!Number.isFinite(ctvRate) || ctvRate < 0) ctvRate = DEFAULT_CTV_RATES[riskKey];
 
+          // Áp dụng hoa hồng theo từng dự án: TNEX (2%), VPBank (2%), VietCredit (theo rủi ro)
+          var campUpper = String((lead && lead.campaignName) || "").toUpperCase();
+          if (campUpper.indexOf("TNEX") !== -1) {
+            ctvRate = 2.0;
+            atRate = 2.5;
+          } else if (campUpper.indexOf("VPBANK") !== -1 || campUpper.indexOf("VP BANK") !== -1) {
+            ctvRate = 2.0;
+            atRate = 2.5;
+          }
+
           var isCancelled = lead.statusInfo.key === "cancelled";
           var ctvCommission = isCancelled
             ? 0
@@ -3676,12 +3686,12 @@
           var raw = [
             { id: "DEMO-001", merchant: "Tin Vay VietCredit", transaction_time: isoDaysAgo(0, 11, 20), commission: 350000, status: 0, is_confirmed: 0, sub2: "CTV-A", risk_level: "high" },
             { id: "DEMO-002", merchant: "Thẻ tín dụng VPBank", transaction_time: isoDaysAgo(0, 9, 15), commission: 480000, status: 1, is_confirmed: 0, sub2: "CTV-B", risk_level: "medium" },
-            { id: "DEMO-003", merchant: "Mở tài khoản MB Bank", transaction_time: isoDaysAgo(1, 16, 40), commission: 120000, status: 1, is_confirmed: 1, sub2: "CTV-A", risk_level: "low" },
+            { id: "DEMO-003", merchant: "Mở tài khoản TNEX", transaction_time: isoDaysAgo(1, 16, 40), commission: 120000, status: 1, is_confirmed: 1, sub2: "CTV-A", risk_level: "low" },
             { id: "DEMO-004", merchant: "Tin Vay VietCredit", transaction_time: isoDaysAgo(1, 14, 10), commission: 350000, status: 1, is_confirmed: 0, sub2: "CTV-C", risk_level: "high" },
             { id: "DEMO-005", merchant: "Vay tiêu dùng Shinhan", transaction_time: isoDaysAgo(2, 10, 5), commission: 550000, status: 0, is_confirmed: 0, sub2: "CTV-A", risk_level: "high" },
             { id: "DEMO-006", merchant: "Thẻ tín dụng VIB", transaction_time: isoDaysAgo(2, 15, 30), commission: 500000, status: 2, is_confirmed: 0, sub2: "CTV-B", risk_level: "medium" },
             { id: "DEMO-007", merchant: "Thẻ tín dụng TPBank EVO", transaction_time: isoDaysAgo(3, 13, 50), commission: 320000, status: 1, is_confirmed: 1, sub2: "CTV-A", risk_level: "low" },
-            { id: "DEMO-008", merchant: "Mở tài khoản Cake", transaction_time: isoDaysAgo(3, 8, 45), commission: 85000, status: 1, is_confirmed: 0, sub2: "CTV-C", risk_level: "low" },
+            { id: "DEMO-008", merchant: "Mở tài khoản TNEX", transaction_time: isoDaysAgo(3, 8, 45), commission: 85000, status: 1, is_confirmed: 0, sub2: "CTV-C", risk_level: "low" },
             { id: "DEMO-009", merchant: "Vay nhanh FeCredit", transaction_time: isoDaysAgo(4, 17, 20), commission: 420000, status: 0, is_confirmed: 0, sub2: "CTV-B", risk_level: "high" },
             { id: "DEMO-010", merchant: "Thẻ tín dụng Techcombank", transaction_time: isoDaysAgo(4, 11, 15), commission: 600000, status: 1, is_confirmed: 1, sub2: "CTV-A", risk_level: "medium" },
             { id: "DEMO-011", merchant: "Mở tài khoản VPBank NEO", transaction_time: isoDaysAgo(5, 14, 30), commission: 95000, status: 1, is_confirmed: 0, sub2: "CTV-C", risk_level: "low" },
