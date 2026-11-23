@@ -68,7 +68,9 @@ try {
 
 const INDEX_HTML_PATH = path.join(__dirname, "index.html");
 const CTV_VIEW_HTML_PATH = path.join(__dirname, "ctv-view.html");
-const BRIDGE_STATE_PATH = path.join(__dirname, ".ctv-bridge-state.json");
+const BRIDGE_STATE_PATH = process.env.VERCEL
+  ? path.join("/tmp", ".ctv-bridge-state.json")
+  : path.join(__dirname, ".ctv-bridge-state.json");
 const cache = new Map();
 const inFlight = new Map();
 const viewRateMap = new Map();
@@ -1828,6 +1830,10 @@ const server = http.createServer(async (req, res) => {
   sendJson(res, 404, { error: "Không tìm thấy đường dẫn yêu cầu." });
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log("Dasboard Fin đang chạy tại http://localhost:" + PORT);
-});
+if (!process.env.VERCEL) {
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log("Dasboard Fin đang chạy tại http://localhost:" + PORT);
+  });
+}
+
+module.exports = server;
