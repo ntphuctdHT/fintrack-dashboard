@@ -3711,6 +3711,10 @@
                 if (typeof parsed.accessKey === "string") {
                   state.accessKey = parsed.accessKey.trim();
                 }
+                // Nếu có Access Key thì tự động dùng dữ liệu thật (bỏ qua mode demo đã lưu)
+                if (state.accessKey && state.mode === "demo") {
+                  state.mode = "real";
+                }
                 if (typeof parsed.serverUrl === "string") {
                   state.serverUrl = parsed.serverUrl.trim();
                 }
@@ -5814,7 +5818,13 @@
               var keyInput = document.getElementById("input-access-key");
               var urlInput = document.getElementById("input-server-url");
 
-              var nextMode = modeSelect.value === "real" ? "real" : "demo";
+              // Nếu có Access Key thì luôn dùng real, bất kể dropdown
+              var nextMode = (modeSelect && modeSelect.value === "real") ? "real" : "demo";
+              var nextKeyPreview = keyInput ? keyInput.value.trim() : "";
+              if (nextKeyPreview && nextMode === "demo") {
+                nextMode = "real";
+                if (modeSelect) modeSelect.value = "real";
+              }
               var nextKey = keyInput ? keyInput.value.trim() : "";
               var nextUrl = urlInput ? urlInput.value.trim() : "";
 
