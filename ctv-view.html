@@ -646,31 +646,14 @@
       .footer-disclaimer-box {
         background-color: var(--color-surface-muted);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: var(--space-3) var(--space-4);
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-2);
-      }
-
-      .disclaimer-header {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-      }
-
-      .disclaimer-badge {
-        font-size: 11px;
-        font-weight: 700;
-        color: var(--color-text-muted);
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
+        border-radius: var(--radius-sm);
+        padding: var(--space-2) var(--space-3);
       }
 
       .disclaimer-text {
         margin: 0;
-        font-size: 11px;
-        line-height: 1.55;
+        font-size: var(--text-xs);
+        line-height: 1.5;
         color: var(--color-text-muted);
       }
 
@@ -678,20 +661,12 @@
         color: var(--color-text);
       }
 
-      .disclaimer-highlight {
-        color: var(--color-warning-text);
-        padding-top: var(--space-1);
-        border-top: 1px dashed var(--color-border);
-      }
-
       .footer-bottom-bar {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: var(--space-2);
-        flex-wrap: wrap;
-        padding-top: var(--space-2);
-        font-size: 11px;
+        justify-content: center;
+        padding-top: var(--space-1);
+        font-size: var(--text-xs);
         color: var(--color-text-muted);
       }
 
@@ -1051,7 +1026,7 @@
         <a id="btn-zalo-support" href="https://zalo.me" target="_blank" rel="noopener noreferrer" hidden aria-hidden="true"></a>
       </div>
 
-      <!-- 5. Chân trang chuyên nghiệp & Miễn trừ trách nhiệm -->
+      <!-- 5. Chân trang tinh tế & Lưu ý ngắn gọn -->
       <footer class="site-footer" id="site-footer" hidden>
         <div class="footer-action-row">
           <div class="footer-meta-wrap">
@@ -1059,31 +1034,18 @@
             <p class="footer-note" id="footer-updated-note">Đang đồng bộ số liệu...</p>
           </div>
           <button type="button" class="footer-reload-btn" id="btn-reload">
-            <span aria-hidden="true">↻</span> Tải lại dữ liệu
+            <span aria-hidden="true">↻</span> Tải lại
           </button>
         </div>
 
         <div class="footer-disclaimer-box">
-          <div class="disclaimer-header">
-            <span class="disclaimer-badge">⚖ KHUYẾN CÁO & MIỄN TRỪ TRÁCH NHIỆM</span>
-          </div>
           <p class="disclaimer-text">
-            <strong>1. Mục đích nội bộ:</strong> Bảng điều khiển (Dashboard) này chỉ dành riêng cho từng Cộng tác viên (CTV) và Publisher tra cứu tiến độ đơn hàng và đối soát hoa hồng tiếp thị liên kết (Affiliate). Hệ thống hoàn toàn không phục vụ cho số đông công chúng và không phải là website dịch vụ công khai.
-          </p>
-          <p class="disclaimer-text">
-            <strong>2. Quyền riêng tư & Bảo vệ dữ liệu:</strong> Hệ thống cam kết <strong>không thu thập, không lưu trữ và không khai thác thông tin cá nhân nhạy cảm</strong> của khách hàng (như số CMND/CCCD, thông tin sinh trắc học, tài khoản ngân hàng riêng tư). Dữ liệu chỉ gồm mã đơn mã hóa để ghi nhận hoa hồng.
-          </p>
-          <p class="disclaimer-text">
-            <strong>3. Tuyên bố phi tín dụng:</strong> Website và ban quản trị <strong>không phải là ngân hàng, không phải tổ chức tín dụng, công ty tài chính hay đơn vị cho vay</strong> dưới bất kỳ hình thức nào. Quyền phê duyệt và giải ngân khoản vay/mở thẻ thuộc thẩm quyền độc lập của các tổ chức tài chính đối tác (VietCredit, TNEX, VPBank,...).
-          </p>
-          <p class="disclaimer-text disclaimer-highlight">
-            ⚠ <em>Người dùng cần đọc kỹ, nắm vững quy định và tuân thủ các quy chuẩn tiếp thị liên kết minh bạch trước khi sử dụng.</em>
+            ℹ <strong>Lưu ý:</strong> Bảng theo dõi nội bộ dành riêng cho CTV và Publisher đối soát số liệu đơn tiếp thị liên kết. Hệ thống không thu thập thông tin cá nhân khách hàng, không phải tổ chức tín dụng hay bên cho vay.
           </p>
         </div>
 
         <div class="footer-bottom-bar">
-          <span class="footer-brand">FinTrack Affiliate Dashboard · Vận hành minh bạch</span>
-          <span class="footer-secure-tag">🔒 Dữ liệu mã hóa bảo vệ CTV</span>
+          <span class="footer-brand">FinTrack Affiliate · Minh bạch & Bảo mật</span>
         </div>
       </footer>
     </main>

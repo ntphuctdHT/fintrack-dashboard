@@ -1507,60 +1507,31 @@
         }
       }
 
-      /* ===== Chân trang chuyên nghiệp & Miễn trừ trách nhiệm (Admin) ===== */
+      /* ===== Chân trang tinh tế & Lưu ý ngắn gọn (Admin) ===== */
       .app-site-footer {
         margin-top: var(--space-6);
         padding-bottom: calc(var(--tab-min) + var(--space-6));
         display: flex;
         flex-direction: column;
-        gap: var(--space-3);
+        gap: var(--space-2);
       }
 
       .footer-disclaimer-card {
         background-color: var(--color-surface);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: var(--space-4);
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-2);
+        border-radius: var(--radius-sm);
+        padding: var(--space-2) var(--space-3);
       }
 
-      .disclaimer-header {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-      }
-
-      .disclaimer-badge {
-        font-size: var(--text-xs);
-        font-weight: 700;
-        color: var(--color-text-muted);
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-      }
-
-      .disclaimer-content {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-2);
-      }
-
-      .disclaimer-paragraph {
+      .footer-disclaimer-card .disclaimer-text {
         margin: 0;
         font-size: var(--text-xs);
-        line-height: 1.6;
+        line-height: 1.5;
         color: var(--color-text-muted);
       }
 
-      .disclaimer-paragraph strong {
+      .footer-disclaimer-card .disclaimer-text strong {
         color: var(--color-text);
-      }
-
-      .disclaimer-notice {
-        color: var(--color-warning-text);
-        padding-top: var(--space-2);
-        border-top: 1px dashed var(--color-border);
       }
 
       .footer-meta-bar {
@@ -2091,30 +2062,16 @@
             </section>
           </section>
 
-          <!-- Footer Chuyên Nghiệp & Miễn Trừ Trách Nhiệm (Admin) -->
+          <!-- Footer Tinh Tế & Lưu Ý Ngắn Gọn (Admin) -->
           <footer class="app-site-footer" id="app-site-footer">
             <div class="footer-disclaimer-card">
-              <div class="disclaimer-header">
-                <span class="disclaimer-badge">⚖ THÔNG BÁO PHÁP LÝ & MIỄN TRỪ TRÁCH NHIỆM</span>
-              </div>
-              <div class="disclaimer-content">
-                <p class="disclaimer-paragraph">
-                  <strong>1. Mục đích vận hành:</strong> Bảng điều khiển (Dashboard) này được thiết kế và vận hành nội bộ, phục vụ riêng cho Publisher và các Cộng tác viên (CTV) được phân quyền để theo dõi, quản trị và đối soát các đơn hàng tiếp thị liên kết (Affiliate Marketing). Hệ thống không phục vụ cho công chúng và không phát hành ra số đông.
-                </p>
-                <p class="disclaimer-paragraph">
-                  <strong>2. Bảo mật thông tin:</strong> Hệ thống cam kết tuân thủ nghiêm ngặt nguyên tắc bảo mật: <strong>không thu thập, không khai thác và không lưu trữ thông tin nhận dạng cá nhân nhạy cảm</strong> của người dùng cuối (như số CMND/CCCD, thông tin sinh trắc học, tài khoản ngân hàng riêng tư). Toàn bộ dữ liệu hiển thị là mã đối soát đơn hàng mã hóa.
-                </p>
-                <p class="disclaimer-paragraph">
-                  <strong>3. Tuyên bố phi tín dụng:</strong> Ứng dụng này <strong>không phải là ngân hàng, không phải tổ chức tín dụng, công ty tài chính hay đơn vị cho vay</strong>. Chúng tôi không cung cấp bất kỳ dịch vụ tín dụng, tư vấn tài chính hay thẩm định cho vay nào. Mọi hoạt động phê duyệt, giải ngân và cấp tín dụng thuộc thẩm quyền độc lập của các ngân hàng và tổ chức tài chính đối tác hợp pháp.
-                </p>
-                <p class="disclaimer-paragraph disclaimer-notice">
-                  ⚠ <em>Các bên tham gia cần đọc kỹ quy chế, nắm rõ trách nhiệm pháp lý và tuân thủ pháp luật Việt Nam về tiếp thị liên kết và quảng cáo tài chính minh bạch.</em>
-                </p>
-              </div>
+              <p class="disclaimer-text">
+                ℹ <strong>Lưu ý:</strong> Bảng điều khiển quản trị nội bộ dành riêng cho Publisher và CTV đối soát số liệu affiliate. Hệ thống không thu thập thông tin cá nhân khách hàng và không phải tổ chức tín dụng hay bên cho vay.
+              </p>
             </div>
             <div class="footer-meta-bar">
-              <span>© 2026 Dasboard Fin · Hệ thống quản trị Affiliate minh bạch</span>
-              <span>🔒 Bảo mật cục bộ · Không lưu trữ dữ liệu cá nhân</span>
+              <span>© 2026 Dasboard Fin · Vận hành minh bạch</span>
+              <span>🔒 Dữ liệu lưu cục bộ an toàn</span>
             </div>
           </footer>
         </div>
