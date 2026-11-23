@@ -585,23 +585,124 @@
         color: var(--color-text);
       }
 
-      /* Chân trang */
+      /* ===== Chân trang chuyên nghiệp & Miễn trừ trách nhiệm ===== */
       .site-footer {
-        padding-top: var(--space-3);
+        padding-top: var(--space-4);
         border-top: 1px solid var(--color-border);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+      }
+
+      .footer-action-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: var(--space-3);
+        gap: var(--space-2);
         flex-wrap: wrap;
+      }
+
+      .footer-meta-wrap {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        flex: 1;
+        min-width: 180px;
+      }
+
+      .footer-dot-live {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--color-success);
+        flex-shrink: 0;
       }
 
       .footer-note {
         margin: 0;
         font-size: var(--text-xs);
         color: var(--color-text-muted);
-        flex: 1;
-        min-width: 180px;
+        line-height: 1.4;
+      }
+
+      .footer-reload-btn {
+        padding: 6px 14px;
+        font-size: var(--text-xs);
+        font-weight: 600;
+        color: var(--color-primary);
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border-strong);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .footer-reload-btn:hover {
+        background-color: var(--color-surface-muted);
+      }
+
+      .footer-disclaimer-box {
+        background-color: var(--color-surface-muted);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: var(--space-3) var(--space-4);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+
+      .disclaimer-header {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .disclaimer-badge {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--color-text-muted);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .disclaimer-text {
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.55;
+        color: var(--color-text-muted);
+      }
+
+      .disclaimer-text strong {
+        color: var(--color-text);
+      }
+
+      .disclaimer-highlight {
+        color: var(--color-warning-text);
+        padding-top: var(--space-1);
+        border-top: 1px dashed var(--color-border);
+      }
+
+      .footer-bottom-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        flex-wrap: wrap;
+        padding-top: var(--space-2);
+        font-size: 11px;
+        color: var(--color-text-muted);
+      }
+
+      .footer-brand {
+        font-weight: 600;
+      }
+
+      .footer-secure-tag {
+        font-size: 11px;
+        color: var(--color-success);
+        font-weight: 600;
       }
 
       /* Khung xương khi đang tải */
@@ -950,9 +1051,40 @@
         <a id="btn-zalo-support" href="https://zalo.me" target="_blank" rel="noopener noreferrer" hidden aria-hidden="true"></a>
       </div>
 
+      <!-- 5. Chân trang chuyên nghiệp & Miễn trừ trách nhiệm -->
       <footer class="site-footer" id="site-footer" hidden>
-        <p class="footer-note" id="footer-updated-note"></p>
-        <button type="button" class="btn-secondary" id="btn-reload">Tải lại</button>
+        <div class="footer-action-row">
+          <div class="footer-meta-wrap">
+            <span class="footer-dot-live" aria-hidden="true"></span>
+            <p class="footer-note" id="footer-updated-note">Đang đồng bộ số liệu...</p>
+          </div>
+          <button type="button" class="footer-reload-btn" id="btn-reload">
+            <span aria-hidden="true">↻</span> Tải lại dữ liệu
+          </button>
+        </div>
+
+        <div class="footer-disclaimer-box">
+          <div class="disclaimer-header">
+            <span class="disclaimer-badge">⚖ KHUYẾN CÁO & MIỄN TRỪ TRÁCH NHIỆM</span>
+          </div>
+          <p class="disclaimer-text">
+            <strong>1. Mục đích nội bộ:</strong> Bảng điều khiển (Dashboard) này chỉ dành riêng cho từng Cộng tác viên (CTV) và Publisher tra cứu tiến độ đơn hàng và đối soát hoa hồng tiếp thị liên kết (Affiliate). Hệ thống hoàn toàn không phục vụ cho số đông công chúng và không phải là website dịch vụ công khai.
+          </p>
+          <p class="disclaimer-text">
+            <strong>2. Quyền riêng tư & Bảo vệ dữ liệu:</strong> Hệ thống cam kết <strong>không thu thập, không lưu trữ và không khai thác thông tin cá nhân nhạy cảm</strong> của khách hàng (như số CMND/CCCD, thông tin sinh trắc học, tài khoản ngân hàng riêng tư). Dữ liệu chỉ gồm mã đơn mã hóa để ghi nhận hoa hồng.
+          </p>
+          <p class="disclaimer-text">
+            <strong>3. Tuyên bố phi tín dụng:</strong> Website và ban quản trị <strong>không phải là ngân hàng, không phải tổ chức tín dụng, công ty tài chính hay đơn vị cho vay</strong> dưới bất kỳ hình thức nào. Quyền phê duyệt và giải ngân khoản vay/mở thẻ thuộc thẩm quyền độc lập của các tổ chức tài chính đối tác (VietCredit, TNEX, VPBank,...).
+          </p>
+          <p class="disclaimer-text disclaimer-highlight">
+            ⚠ <em>Người dùng cần đọc kỹ, nắm vững quy định và tuân thủ các quy chuẩn tiếp thị liên kết minh bạch trước khi sử dụng.</em>
+          </p>
+        </div>
+
+        <div class="footer-bottom-bar">
+          <span class="footer-brand">FinTrack Affiliate Dashboard · Vận hành minh bạch</span>
+          <span class="footer-secure-tag">🔒 Dữ liệu mã hóa bảo vệ CTV</span>
+        </div>
       </footer>
     </main>
 
