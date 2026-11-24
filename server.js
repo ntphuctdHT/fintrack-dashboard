@@ -1641,7 +1641,8 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
       medium: Number(ctvRates.medium) > 0 ? Number(ctvRates.medium) : DEFAULT_CTV_RATES.medium,
       high:   Number(ctvRates.high)   > 0 ? Number(ctvRates.high)   : DEFAULT_CTV_RATES.high
     },
-    badges: (bridgeState.policy && bridgeState.policy.ctvBadges) || null
+    badges: (bridgeState.policy && bridgeState.policy.ctvBadges) || null,
+    project_links: (bridgeState.policy && bridgeState.policy.projectLinks) || {}
   };
 }
 
@@ -1666,8 +1667,10 @@ const server = http.createServer(async (req, res) => {
     reqMethod === "GET" &&
     (pathname === "/ctv-view.html" ||
       pathname === "/xem" ||
+      pathname === "/x" ||
       pathname.startsWith("/xem/") ||
-      /\/xem\/[a-z0-9]{1,64}\/?$/i.test(pathname))
+      pathname.startsWith("/x/") ||
+      /\/(?:xem|x)\/[a-z0-9]{1,64}\/?$/i.test(pathname))
   ) {
     serveHtmlFile(res, CTV_VIEW_HTML_PATH, "Không đọc được tệp ctv-view.html cùng thư mục.");
     return;
@@ -1883,7 +1886,17 @@ const server = http.createServer(async (req, res) => {
         ctvBadges:
           rawPolicy.ctvBadges && typeof rawPolicy.ctvBadges === "object" && !Array.isArray(rawPolicy.ctvBadges)
             ? rawPolicy.ctvBadges
-            : (bridgeState.policy && bridgeState.policy.ctvBadges) || null
+            : (bridgeState.policy && bridgeState.policy.ctvBadges) || null,
+        projectLinks: {
+          vietcredit:
+            typeof (rawPolicy.projectLinks && rawPolicy.projectLinks.vietcredit) === "string"
+              ? rawPolicy.projectLinks.vietcredit.trim()
+              : (bridgeState.policy && bridgeState.policy.projectLinks && bridgeState.policy.projectLinks.vietcredit) || "",
+          tnex:
+            typeof (rawPolicy.projectLinks && rawPolicy.projectLinks.tnex) === "string"
+              ? rawPolicy.projectLinks.tnex.trim()
+              : (bridgeState.policy && bridgeState.policy.projectLinks && bridgeState.policy.projectLinks.tnex) || ""
+        }
       },
       syncedLeads: cleanLeads,
       accessKey: bridgeRuntimeKey || (bridgeState && bridgeState.accessKey) || ""

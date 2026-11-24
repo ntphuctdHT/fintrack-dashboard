@@ -16,8 +16,9 @@
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Trạng thái đơn Pub của bạn" />
-  <meta name="twitter:description" content="Trạng thái đơn Pub của bạn - Cập nhật tự động số liệu hoa hồng và đơn hàng" />
-  <!-- Hồ sơ cộng tác viên -->
+  <meta name="twitter:description"
+    content="Trạng thái đơn Pub của bạn - Cập nhật tự động số liệu hoa hồng và đơn hàng" />
+  <!-- Trạng thái đơn Pub của bạn -->
   <style>
     :root {
       color-scheme: light;
@@ -1149,9 +1150,32 @@
       color: var(--c-sub);
     }
 
-    .pub-project-policy {
+    .pub-project-action {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .btn-project-copy {
+      padding: 4px 14px;
       font-size: var(--text-xs);
-      color: #334155;
+      font-weight: 600;
+      color: var(--c-bg);
+      background-color: var(--c-ink);
+      border: 1px solid var(--c-ink);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    .btn-project-copy:hover {
+      opacity: 0.88;
+    }
+
+    .project-copy-feedback {
+      font-size: var(--text-xs);
+      color: var(--c-ink);
       font-weight: 600;
     }
   </style>
@@ -1216,8 +1240,9 @@
             <strong class="pub-project-name">VietCredit - Công ty Tài chính Cổ phần Tín Việt</strong>
           </div>
           <p class="pub-project-desc">Chiến dịch Vay tín chấp &amp; Thẻ vay tiêu dùng Tín Việt.</p>
-          <div class="pub-project-policy">
-            <span>📌 Chính sách:</span> Ghi nhận đơn thật và đối soát tự động từ AccessTrade.
+          <div class="pub-project-action">
+            <button type="button" class="btn-project-copy" data-project-key="vietcredit">Copy</button>
+            <span class="project-copy-feedback" id="copy-fb-vietcredit" hidden>Đã copy link!</span>
           </div>
         </div>
 
@@ -1227,11 +1252,11 @@
             <span class="pub-project-tag">Ngân hàng số</span>
             <strong class="pub-project-name">TNEX - Ngân hàng số Hàng Hải (MSB)</strong>
           </div>
-          <p class="pub-project-desc">Chiến dịch Mở tài khoản thanh toán / eKYC ngân hàng MSB.</p>
-          <div class="pub-project-policy">
-            <span>📌 Chính sách:</span> Ghi nhận đơn thật và đối soát tự động từ AccessTrade.
-          </div>
           <p class="pub-project-desc">Chiến dịch Vay tiêu dùng online (TNEX - MSB).</p>
+          <div class="pub-project-action">
+            <button type="button" class="btn-project-copy" data-project-key="tnex">Copy</button>
+            <span class="project-copy-feedback" id="copy-fb-tnex" hidden>Đã copy link!</span>
+          </div>
         </div>
       </div>
     </section>
@@ -1429,8 +1454,8 @@
         var candidate = "";
         var source = "";
 
-        // Ưu tiên 1: /xem/<mã>
-        var pathMatch = pathname.match(/\/xem\/([^/]+)\/?$/i);
+        // Ưu tiên 1: /xem/<mã> hoặc /x/<mã>
+        var pathMatch = pathname.match(/\/(?:xem|x)\/([^/]+)\/?$/i);
         if (pathMatch) {
           try {
             candidate = decodeURIComponent(pathMatch[1]).trim();
@@ -1576,7 +1601,8 @@
             name: projectName,
             note: projectNote
           },
-          commissionPolicy: commissionPolicy
+          commissionPolicy: commissionPolicy,
+          projectLinks: (raw.project_links && typeof raw.project_links === "object") ? raw.project_links : ((raw.projectLinks && typeof raw.projectLinks === "object") ? raw.projectLinks : {})
         };
       }
 
@@ -2020,21 +2046,20 @@
           });
           if (timer) window.clearTimeout(timer);
 
-          if (resp.status === 404) {
-            // Khi refresh ngầm mà server chưa phản hồi: giữ nguyên dữ liệu đang xem của CTV
+          if (resp.status >= 400) {
+            // Khi refresh ngầm mà gặp bất kỳ mã lỗi nào (404, 429, 500, 502...): giữ nguyên dữ liệu đang xem của CTV
             if (isBackgroundRefresh) {
+              return;
+            }
+            if (resp.status === 429) {
+              state.loading = false;
+              state.errorKind = "ratelimit";
+              renderCurrentView();
               return;
             }
             state.loading = false;
             state.errorKind = "invalid";
             state.data = null;
-            renderCurrentView();
-            return;
-          }
-          if (resp.status === 429) {
-            if (isBackgroundRefresh) return;
-            state.loading = false;
-            state.errorKind = "ratelimit";
             renderCurrentView();
             return;
           }
@@ -2125,6 +2150,60 @@
         var copyBtn = document.getElementById("btn-copy-link");
         if (copyBtn) {
           copyBtn.addEventListener("click", handleCopySalesLink);
+        }
+
+        var projectCopyBtns = document.querySelectorAll(".btn-project-copy[data-project-key]");
+        for (var pki = 0; pki < projectCopyBtns.length; pki++) {
+          projectCopyBtns[pki].addEventListener("click", async function (ev) {
+            var btn = ev.currentTarget;
+            var key = btn.getAttribute("data-project-key");
+            var links = (state.data && state.data.projectLinks) || {};
+            var targetUrl = (links && typeof links[key] === "string" && links[key].trim())
+              ? links[key].trim()
+              : (state.data && state.data.shortLink ? state.data.shortLink : "");
+            var fb = document.getElementById("copy-fb-" + key);
+
+            if (!targetUrl) {
+              if (fb) {
+                fb.hidden = false;
+                fb.textContent = "Chưa có link dự án";
+                setTimeout(function () { fb.hidden = true; }, 2500);
+              }
+              return;
+            }
+
+            var copied = false;
+            if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+              try {
+                await navigator.clipboard.writeText(targetUrl);
+                copied = true;
+              } catch (_e) {
+                copied = false;
+              }
+            }
+
+            if (!copied) {
+              try {
+                var ta = document.createElement("textarea");
+                ta.value = targetUrl;
+                ta.setAttribute("readonly", "");
+                ta.style.position = "absolute";
+                ta.style.left = "-9999px";
+                document.body.appendChild(ta);
+                ta.select();
+                copied = document.execCommand("copy");
+                document.body.removeChild(ta);
+              } catch (_e2) {
+                copied = false;
+              }
+            }
+
+            if (fb) {
+              fb.hidden = false;
+              fb.textContent = copied ? "Đã copy!" : "Chưa thể copy";
+              setTimeout(function () { fb.hidden = true; }, 2000);
+            }
+          });
         }
 
         var reloadBtn = document.getElementById("btn-reload");
