@@ -6,7 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="referrer" content="no-referrer" />
-  <title>Trạng thái đơn Pub của bạn</title>
+    <title>Trạng thái đơn Pub của bạn</title>
+  <meta name="title" content="Trạng thái đơn Pub của bạn" />
+  <meta name="description" content="Trạng thái đơn Pub của bạn - Cập nhật tự động số liệu hoa hồng và đơn hàng" />
+  <meta property="og:title" content="Trạng thái đơn Pub của bạn" />
+  <meta property="og:description" content="Trạng thái đơn Pub của bạn - Cập nhật tự động số liệu hoa hồng và đơn hàng" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:title" content="Trạng thái đơn Pub của bạn" />
+  <meta name="twitter:description" content="Trạng thái đơn Pub của bạn - Cập nhật tự động" />
   <meta property="og:title" content="Trạng thái đơn Pub của bạn" />
   <meta property="og:description" content="Trạng thái đơn Pub của bạn" />
   <style>
@@ -996,35 +1003,47 @@
           .rate-highlight {
             font-size: var(--text-base);
             font-weight: 700;
-            color: var(--color-primary);
+            color: #334155 !important;
           }
 
           .rate-badge {
             display: inline-block;
             font-weight: 700;
             font-size: var(--text-sm);
-            color: var(--color-primary);
+            color: #334155 !important;
           }
 
           .risk-tag {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            padding: 1px 6px;
+            padding: 2px 8px;
             border-radius: 999px;
             font-size: var(--text-xs);
             font-weight: 600;
-            background-color: var(--color-surface-muted);
-            color: var(--color-text-muted);
-            border: 1px solid var(--color-border);
+            background-color: var(--c-soft);
+            color: #334155 !important;
+            border: 1px solid var(--c-border);
           }
 
     .risk-tag-low,
     .risk-tag-medium,
     .risk-tag-high {
-      background-color: var(--color-primary-soft);
-      color: var(--color-primary);
-      border: 1px solid var(--color-border-strong);
+      background-color: var(--c-soft);
+      color: #334155 !important;
+      border: 1px solid var(--c-border);
+      font-weight: 700;
+    }
+
+    .policy-title {
+      font-size: var(--text-base);
+      margin: 0;
+      color: #334155 !important;
+      font-weight: 700;
+    }
+
+    .btn-toggle-policy {
+      color: #334155 !important;
     }
 
           .commission-note {
