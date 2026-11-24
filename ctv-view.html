@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="vi">
 
 <head>
@@ -6,53 +6,65 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="referrer" content="no-referrer" />
-  <title>Hồ sơ cộng tác viên</title>
+  <title>Trạng thái đơn Pub của bạn</title>
+  <meta property="og:title" content="Trạng thái đơn Pub của bạn" />
+  <meta property="og:description" content="Trạng thái đơn Pub của bạn" />
   <style>
     :root {
       color-scheme: light;
 
-      /* BẢNG MÀU CHUẨN 5 MÀU (CHỈ 5 MÀU, KHÔNG DÙNG MÀU NÀO KHÁC) */
-      --bg-main: #F8FBFF;
-      --bg-nav: #EAF4FF;
-      --bg-card: #F5FAFF;
-      --text-main: #1D3F54;
-      --accent: #5CC4B8;
+      /* === BỘ MÀU 9 BIẾN === */
+      --c-bg:      #E8F3FA;
+      --c-ink:     #334155;
+      --c-accent:  #8CCBE8;
+      --c-card:    #F4F6F8;
+      --c-border:  color-mix(in srgb, var(--c-ink) 14%, var(--c-bg));
+      --c-sub:     color-mix(in srgb, var(--c-ink) 78%, var(--c-bg));
+      --c-soft:    color-mix(in srgb, var(--c-ink) 30%, var(--c-bg));
+      --c-hover:   color-mix(in srgb, var(--c-ink) 8%, var(--c-card));
+      --c-band:    color-mix(in srgb, var(--c-accent) 38%, var(--c-bg));
 
-      /* Ánh xạ biến hệ thống */
-      --color-bg: var(--bg-main);
-      --color-bg-page: var(--bg-main);
-      --color-header-bg: var(--bg-nav);
-      --color-surface: var(--bg-card);
-      --color-surface-muted: var(--bg-nav);
-      --color-border: var(--bg-nav);
-      --color-border-strong: var(--bg-nav);
-      --color-surface-cream: var(--bg-card);
-      --color-border-cream: var(--bg-nav);
-      --color-text-title: var(--text-main);
-      --color-text: var(--text-main);
-      --color-text-muted: var(--text-main);
-      --color-primary: var(--accent);
-      --color-primary-hover: var(--accent);
-      --color-primary-soft: var(--bg-nav);
-      --color-primary-text: var(--text-main);
-      --color-on-primary: var(--text-main);
-      --color-primary-solid: var(--accent);
-      --color-navy: var(--bg-nav);
-      --color-navy-hover: var(--bg-nav);
-      --color-navy-soft: var(--bg-nav);
-      --color-success: var(--accent);
-      --color-success-hover: var(--accent);
-      --color-success-soft: var(--bg-nav);
-      --color-success-text: var(--text-main);
-      --color-success-border: var(--bg-nav);
-      --color-warning: var(--text-main);
-      --color-warning-soft: var(--bg-nav);
-      --color-warning-text: var(--text-main);
-      --color-warning-border: var(--bg-nav);
-      --color-error: var(--text-main);
-      --color-error-soft: var(--bg-nav);
-      --color-error-text: var(--text-main);
-      --color-error-border: var(--bg-nav);
+      /* Ánh xạ → biến cũ */
+      --bg-main: var(--c-bg);
+      --bg-nav:  var(--c-border);
+      --bg-card: var(--c-card);
+      --text-main: var(--c-ink);
+      --accent:  var(--c-accent);
+
+      --color-bg: var(--c-bg);
+      --color-bg-page: var(--c-bg);
+      --color-header-bg: var(--c-band);
+      --color-surface: var(--c-card);
+      --color-surface-muted: var(--c-soft);
+      --color-border: var(--c-border);
+      --color-border-strong: var(--c-border);
+      --color-surface-cream: var(--c-card);
+      --color-border-cream: var(--c-border);
+      --color-text-title: var(--c-ink);
+      --color-text: var(--c-ink);
+      --color-text-muted: var(--c-sub);
+      --color-primary: var(--c-accent);
+      --color-primary-hover: var(--c-accent);
+      --color-primary-soft: var(--c-soft);
+      --color-primary-text: var(--c-ink);
+      --color-on-primary: var(--c-bg);
+      --color-primary-solid: var(--c-ink);
+      --color-navy: var(--c-border);
+      --color-navy-hover: var(--c-border);
+      --color-navy-soft: var(--c-soft);
+      --color-success: var(--c-accent);
+      --color-success-hover: var(--c-accent);
+      --color-success-soft: var(--c-soft);
+      --color-success-text: var(--c-ink);
+      --color-success-border: var(--c-border);
+      --color-warning: var(--c-ink);
+      --color-warning-soft: var(--c-soft);
+      --color-warning-text: var(--c-ink);
+      --color-warning-border: var(--c-border);
+      --color-error: var(--c-ink);
+      --color-error-soft: var(--c-soft);
+      --color-error-text: var(--c-ink);
+      --color-error-border: var(--c-border);
 
       --space-1: 4px;
       --space-2: 8px;
@@ -63,7 +75,7 @@
 
       /* Bo góc: thẻ 12px, nút và ô lọc 8px */
       --radius-sm: 8px;
-      --radius-md: 12px;
+      --radius-md: 10px;
 
       --text-xs: 12px;
       --text-sm: 14px;
@@ -81,45 +93,7 @@
     @media (prefers-color-scheme: dark) {
       :root {
         color-scheme: light;
-        --bg-main: #F8FBFF;
-        --bg-nav: #EAF4FF;
-        --bg-card: #F5FAFF;
-        --text-main: #1D3F54;
-        --accent: #5CC4B8;
-        --color-bg: var(--bg-main);
-        --color-bg-page: var(--bg-main);
-        --color-header-bg: var(--bg-nav);
-        --color-surface: var(--bg-card);
-        --color-surface-muted: var(--bg-nav);
-        --color-border: var(--bg-nav);
-        --color-border-strong: var(--bg-nav);
-        --color-surface-cream: var(--bg-card);
-        --color-border-cream: var(--bg-nav);
-        --color-text-title: var(--text-main);
-        --color-text: var(--text-main);
-        --color-text-muted: var(--text-main);
-        --color-primary: var(--accent);
-        --color-primary-hover: var(--accent);
-        --color-primary-soft: var(--bg-nav);
-        --color-primary-text: var(--text-main);
-        --color-on-primary: var(--text-main);
-        --color-primary-solid: var(--accent);
-        --color-navy: var(--bg-nav);
-        --color-navy-hover: var(--bg-nav);
-        --color-navy-soft: var(--bg-nav);
-        --color-success: var(--accent);
-        --color-success-hover: var(--accent);
-        --color-success-soft: var(--bg-nav);
-        --color-success-text: var(--text-main);
-        --color-success-border: var(--bg-nav);
-        --color-warning: var(--text-main);
-        --color-warning-soft: var(--bg-nav);
-        --color-warning-text: var(--text-main);
-        --color-warning-border: var(--bg-nav);
-        --color-error: var(--text-main);
-        --color-error-soft: var(--bg-nav);
-        --color-error-text: var(--text-main);
-        --color-error-border: var(--bg-nav);
+        --c-bg: #E8F3FA; --c-ink: #334155; --c-accent: #8CCBE8; --c-card: #F4F6F8;
       }
     }
 
@@ -189,7 +163,7 @@
       border-bottom: 1px solid var(--color-border);
       gap: var(--space-2);
       padding: var(--space-3) var(--space-4);
-      background-color: var(--color-header-bg);
+      background-color: var(--c-band);
       border: 1px solid var(--color-border);
       border-radius: var(--radius-md);
     }
@@ -206,8 +180,8 @@
       height: 40px;
       flex-shrink: 0;
       border-radius: var(--radius-sm);
-      background-color: var(--accent);
-      color: var(--text-main);
+      background-color: var(--c-accent);
+      color: var(--c-ink);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -336,8 +310,8 @@
     }
 
     .kpi-card-highlight {
-      background-color: var(--bg-card) !important;
-      border-color: var(--bg-nav) !important;
+      background-color: var(--c-card) !important;
+      border-color: var(--c-border) !important;
     }
 
     .kpi-label {
@@ -414,9 +388,9 @@
       min-height: var(--touch-min);
       padding: var(--space-2) var(--space-3);
       border-radius: var(--radius-sm);
-      border: 1px solid var(--color-border-strong);
-      background-color: var(--color-surface);
-      color: var(--color-text);
+      border: 1px solid var(--c-border);
+      background-color: var(--c-card);
+      color: var(--c-ink);
       font-size: var(--text-sm);
       font-weight: 600;
       white-space: nowrap;
@@ -424,15 +398,18 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: background-color 0.15s ease, color 0.15s ease;
+      transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .filter-btn:hover {
+      background-color: var(--c-hover);
+      color: var(--c-ink);
     }
 
     .filter-btn[aria-pressed="true"] {
-      background-color: var(--color-primary-solid, var(--color-primary));
-      border-color: var(--color-primary-solid, var(--color-primary));
-      background-color: var(--color-primary);
-      border-color: var(--color-primary);
-      color: var(--color-on-primary);
+      background-color: var(--c-ink);
+      border-color: var(--c-ink);
+      color: var(--c-bg);
     }
 
     /* Danh sách hồ sơ gần đây */
@@ -580,7 +557,7 @@
       border: none;
       font-size: var(--text-xs);
       font-weight: 600;
-      color: var(--text-main);
+      color: var(--c-ink);
       white-space: nowrap;
     }
 
@@ -595,12 +572,12 @@
 
     .status-approved::before,
     .status-reconciled::before {
-      background-color: var(--accent);
+      background-color: var(--c-accent);
     }
 
     .status-pending::before,
     .status-cancelled::before {
-      background-color: var(--text-main);
+      background-color: var(--c-ink);
     }
 
           /* Responsive mở rộng trên Desktop */
@@ -642,8 +619,8 @@
             min-height: var(--touch-min);
             padding: var(--space-2) var(--space-4);
             border-radius: var(--radius-sm);
-            background-color: var(--accent);
-            color: var(--text-main);
+            background-color: var(--c-ink);
+            color: var(--c-bg);
             border: none;
             font-size: var(--text-base);
             font-weight: 700;
@@ -658,9 +635,9 @@
             min-height: var(--touch-min);
             padding: var(--space-2) var(--space-3);
             border-radius: var(--radius-sm);
-            border: 1px solid var(--bg-nav);
-            background-color: var(--bg-card);
-            color: var(--text-main);
+            border: 1px solid var(--c-border);
+            background-color: var(--c-card);
+            color: var(--c-ink);
             font-size: var(--text-base);
             font-weight: 600;
             text-decoration: none;
@@ -1055,12 +1032,31 @@
             font-size: var(--text-xs);
             color: var(--color-text-muted);
           }
+    .site-header {
+      position: relative;
+      background: var(--c-band);
+      padding-bottom: 34px;
+    }
+
+    .ctv-wave {
+      position: absolute;
+      left: 0; right: 0; bottom: -1px;
+      width: 100%; height: 34px;
+      pointer-events: none;
+    }
+
+    .ctv-wave-a { fill: var(--c-accent); fill-opacity: .45; }
+    .ctv-wave-b { fill: var(--c-bg); }
   </style>
 </head>
 
 <body>
   <main class="page-wrap" id="app-root">
     <header class="site-header">
+  <svg class="ctv-wave" viewBox="0 0 400 34" preserveAspectRatio="none" aria-hidden="true">
+    <path class="ctv-wave-a" d="M0 14 Q50 0 100 14 T200 14 T300 14 T400 14 V34 H0Z"/>
+    <path class="ctv-wave-b" d="M0 22 Q60 8 120 22 T240 22 T360 22 T480 22 V34 H0Z"/>
+  </svg>
       <div class="brand-row">
         <div class="brand-logo" id="brand-logo" aria-hidden="true" hidden></div>
         <div class="brand-meta">
