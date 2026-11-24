@@ -527,35 +527,22 @@
     }
 
     .status-pending {
-      background-color: var(--color-warning-soft);
-      color: var(--color-warning-text);
       background-color: var(--color-surface-muted);
       color: var(--color-text-muted);
       border: 1px solid var(--color-border);
     }
 
-    .status-approved {
+    .status-approved,
+    .status-reconciled {
+      background-color: var(--color-primary-soft);
+      color: var(--color-primary);
+      border: 1px solid var(--color-border-strong);
+    }
 
-      .status-approved,
-      .status-reconciled {
-        background-color: var(--color-primary-soft);
-        color: var(--color-primary-text);
-        color: var(--color-primary);
-        border: 1px solid var(--color-border-strong);
-      }
-
-      .status-reconciled {
-        background-color: var(--color-success-soft);
-        color: var(--color-success-text);
-
-        .status-cancelled {
-          background-color: var(--color-primary);
-          color: var(--color-on-primary);
-        }
-
-        .status-cancelled {
-          background-color: var(--color-error-soft);
-          color: var(--color-error-text);
+    .status-cancelled {
+      background-color: var(--color-error);
+      color: var(--color-on-primary);
+    }
 
           /* Responsive mở rộng trên Desktop */
           @media (min-width: 640px) {
@@ -1007,28 +994,13 @@
             border: 1px solid var(--color-border);
           }
 
-          .risk-tag-low {
-            background: rgba(34, 197, 94, .15);
-            color: #16a34a;
-          }
-
-          .risk-tag-medium {
-            background: rgba(234, 179, 8, .15);
-            color: #ca8a04;
-          }
-
-          .risk-tag-high {
-            background: rgba(239, 68, 68, .15);
-            color: #dc2626;
-          }
-
-          .risk-tag-low,
-          .risk-tag-medium,
-          .risk-tag-high {
-            background-color: var(--color-primary-soft);
-            color: var(--color-primary);
-            border: 1px solid var(--color-border-strong);
-          }
+    .risk-tag-low,
+    .risk-tag-medium,
+    .risk-tag-high {
+      background-color: var(--color-primary-soft);
+      color: var(--color-primary);
+      border: 1px solid var(--color-border-strong);
+    }
 
           .commission-note {
             margin: var(--space-2) 0 0;
