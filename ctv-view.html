@@ -11,78 +11,58 @@
     :root {
       color-scheme: light;
 
-      /* Chế độ sáng mặc định */
-      --color-bg: #f8fafc;
-      --color-surface: #ffffff;
-      --color-surface-muted: #f1f5f9;
-      --color-border: #e2e8f0;
-      --color-border-strong: #cbd5e1;
-      /* BẢNG MÀU PASTEL: XANH DƯƠNG – KEM – TRẮNG */
-      /* Nền trang: #EAF4FF */
-      --color-bg: #EAF4FF;
-      --color-bg-page: #EAF4FF;
+      /* BẢNG MÀU CHUẨN 3 MÀU: NGỌC LAM NHẠT - XANH BIỂN TRẦM - XANH XÔ THƠM */
+      /* Nền trang: #EAF2F2 mát dịu pha chút kem sữa */
+      --color-bg: #EAF2F2;
+      --color-bg-page: #EAF2F2;
 
-      --color-text: #0f172a;
-      --color-text-muted: #64748b;
-      /* Header: #D6E9FB */
-      --color-header-bg: #D6E9FB;
+      /* Header: #EAF2F2 */
+      --color-header-bg: #EAF2F2;
 
-      --color-primary: #0b57d0;
-      --color-primary-hover: #0842a0;
-      --color-primary-soft: #eff6ff;
-      --color-primary-text: #0842a0;
-      --color-on-primary: #ffffff;
-      /* Thẻ: nền trắng #FFFFFF, viền #E0F2FE */
+      /* Thẻ: nền trắng #FFFFFF, viền #D1E3E2 */
       --color-surface: #FFFFFF;
-      --color-surface-muted: #F1F5F9;
-      --color-border: #E0F2FE;
-      --color-border-strong: #BAE6FD;
+      --color-surface-muted: #E2ECEB;
+      --color-border: #D1E3E2;
+      --color-border-strong: #B5D2D0;
 
-      --color-success: #15803d;
-      --color-success-soft: #f0fdf4;
-      --color-success-text: #166534;
-      --color-success-border: #bbf7d0;
-      /* Riêng thẻ "Hoa hồng CTV": nền kem #FFFBEB */
-      --color-surface-cream: #FFFBEB;
-      --color-border-cream: #FEF3C7;
+      /* Thẻ nổi bật / Hoa hồng CTV: nền mềm xanh xô thơm #E5F1EE, viền #C2DFDA */
+      --color-surface-cream: #E5F1EE;
+      --color-border-cream: #C2DFDA;
 
-      --color-warning: #a16207;
-      --color-warning-soft: #fefce8;
-      --color-warning-text: #854d0e;
-      --color-warning-border: #fde68a;
-      /* Chữ: tiêu đề #0F172A, nội dung #334155, chữ phụ và metadata #475569 */
-      --color-text-title: #0F172A;
-      --color-text: #334155;
-      --color-text-muted: #475569;
+      /* Chữ: tiêu đề #1D3F54 (Xanh biển trầm), nội dung #243B4A, chữ phụ #4D6A7A */
+      --color-text-title: #1D3F54;
+      --color-text: #243B4A;
+      --color-text-muted: #4D6A7A;
 
-      --color-error: #b91c1c;
-      --color-error-soft: #fef2f2;
-      --color-error-text: #991b1b;
-      --color-error-border: #fecaca;
-      /* Xanh dương chủ đạo: #0369A1 (hover #075985, nền mềm #E0F2FE) */
-      --color-primary: #0369A1;
-      --color-primary-hover: #075985;
-      --color-primary-soft: #E0F2FE;
-      --color-primary-text: #0369A1;
+      /* Xanh xô thơm chủ đạo: #2A7B6F (hover #22645A, nền mềm #E5F1EE) */
+      --color-primary: #2A7B6F;
+      --color-primary-hover: #22645A;
+      --color-primary-soft: #E5F1EE;
+      --color-primary-text: #2A7B6F;
       --color-on-primary: #FFFFFF;
-      --color-primary-solid: #0369A1;
+      --color-primary-solid: #2A7B6F;
+
+      /* Xanh biển trầm: #1D3F54 (hover #163243) */
+      --color-navy: #1D3F54;
+      --color-navy-hover: #163243;
+      --color-navy-soft: #EAF2F2;
 
       /* Trạng thái */
-      --color-success: #0369A1;
-      --color-success-hover: #075985;
-      --color-success-soft: #E0F2FE;
-      --color-success-text: #0369A1;
-      --color-success-border: #BAE6FD;
+      --color-success: #2A7B6F;
+      --color-success-hover: #22645A;
+      --color-success-soft: #E5F1EE;
+      --color-success-text: #2A7B6F;
+      --color-success-border: #C2DFDA;
 
-      --color-warning: #475569;
-      --color-warning-soft: #F1F5F9;
-      --color-warning-text: #475569;
-      --color-warning-border: #E2E8F0;
+      --color-warning: #4D6A7A;
+      --color-warning-soft: #EAF2F2;
+      --color-warning-text: #4D6A7A;
+      --color-warning-border: #D1E3E2;
 
-      --color-error: #0369A1;
-      --color-error-soft: #E0F2FE;
-      --color-error-text: #0369A1;
-      --color-error-border: #BAE6FD;
+      --color-error: #1D3F54;
+      --color-error-soft: #1D3F54;
+      --color-error-text: #FFFFFF;
+      --color-error-border: #1D3F54;
 
       --space-1: 4px;
       --space-2: 8px;
@@ -109,68 +89,41 @@
 
     @media (prefers-color-scheme: dark) {
       :root {
-        /* Bắt buộc dùng chế độ sáng theo yêu cầu */
         color-scheme: light;
-        --color-bg: #f8fafc;
-        --color-surface: #ffffff;
-        --color-surface-muted: #f1f5f9;
-        --color-border: #e2e8f0;
-        --color-border-strong: #cbd5e1;
-
-        --color-text: #0f172a;
-        --color-text-muted: #64748b;
-
-        --color-primary: #0b57d0;
-        --color-primary-hover: #0842a0;
-        --color-primary-soft: #eff6ff;
-        --color-primary-text: #0842a0;
-        --color-on-primary: #ffffff;
-
-        --color-success: #15803d;
-        --color-success-soft: #f0fdf4;
-        --color-success-text: #166534;
-        --color-success-border: #bbf7d0;
-
-        --color-warning: #a16207;
-        --color-warning-soft: #fefce8;
-        --color-warning-text: #854d0e;
-        --color-warning-border: #fde68a;
-
-        --color-error: #b91c1c;
-        --color-error-soft: #fef2f2;
-        --color-error-text: #991b1b;
-        --color-error-border: #fecaca;
-        --color-bg: #EAF4FF;
-        --color-bg-page: #EAF4FF;
-        --color-header-bg: #D6E9FB;
+        --color-bg: #EAF2F2;
+        --color-bg-page: #EAF2F2;
+        --color-header-bg: #EAF2F2;
         --color-surface: #FFFFFF;
-        --color-surface-muted: #F1F5F9;
-        --color-border: #E0F2FE;
-        --color-border-strong: #BAE6FD;
-        --color-surface-cream: #FFFBEB;
-        --color-border-cream: #FEF3C7;
-        --color-text-title: #0F172A;
-        --color-text: #334155;
-        --color-text-muted: #475569;
-        --color-primary: #0369A1;
-        --color-primary-hover: #075985;
-        --color-primary-soft: #E0F2FE;
-        --color-primary-text: #0369A1;
+        --color-surface-muted: #E2ECEB;
+        --color-border: #D1E3E2;
+        --color-border-strong: #B5D2D0;
+        --color-surface-cream: #E5F1EE;
+        --color-border-cream: #C2DFDA;
+        --color-text-title: #1D3F54;
+        --color-text: #243B4A;
+        --color-text-muted: #4D6A7A;
+        --color-primary: #2A7B6F;
+        --color-primary-hover: #22645A;
+        --color-primary-soft: #E5F1EE;
+        --color-primary-text: #2A7B6F;
         --color-on-primary: #FFFFFF;
-        --color-primary-solid: #0369A1;
-        --color-success: #0369A1;
-        --color-success-hover: #075985;
-        --color-success-soft: #E0F2FE;
-        --color-success-text: #0369A1;
-        --color-success-border: #BAE6FD;
-        --color-warning: #475569;
-        --color-warning-soft: #F1F5F9;
-        --color-warning-text: #475569;
-        --color-warning-border: #E2E8F0;
-        --color-error: #0369A1;
-        --color-error-soft: #E0F2FE;
-        --color-error-text: #0369A1;
-        --color-error-border: #BAE6FD;
+        --color-primary-solid: #2A7B6F;
+        --color-navy: #1D3F54;
+        --color-navy-hover: #163243;
+        --color-navy-soft: #EAF2F2;
+        --color-success: #2A7B6F;
+        --color-success-hover: #22645A;
+        --color-success-soft: #E5F1EE;
+        --color-success-text: #2A7B6F;
+        --color-success-border: #C2DFDA;
+        --color-warning: #4D6A7A;
+        --color-warning-soft: #EAF2F2;
+        --color-warning-text: #4D6A7A;
+        --color-warning-border: #D1E3E2;
+        --color-error: #1D3F54;
+        --color-error-soft: #1D3F54;
+        --color-error-text: #FFFFFF;
+        --color-error-border: #1D3F54;
       }
     }
 
