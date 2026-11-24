@@ -1066,6 +1066,78 @@
 
     .ctv-wave-a { fill: var(--c-accent); fill-opacity: .45; }
     .ctv-wave-b { fill: var(--c-bg); }
+    .pub-projects-card {
+      padding: var(--space-3) var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      background-color: var(--c-card);
+      border: 1px solid var(--c-border);
+      border-radius: 10px;
+    }
+
+    .pub-projects-title {
+      font-size: var(--text-base);
+      font-weight: 700;
+      color: #334155;
+      margin: 0;
+    }
+
+    .pub-projects-sub {
+      font-size: var(--text-xs);
+      color: var(--c-sub);
+      margin: 2px 0 0;
+    }
+
+    .pub-projects-grid {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .pub-project-item {
+      background-color: var(--c-bg);
+      border: 1px solid var(--c-border);
+      border-radius: 8px;
+      padding: var(--space-3);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .pub-project-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pub-project-tag {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background-color: var(--c-soft);
+      color: #334155;
+      border: 1px solid var(--c-border);
+    }
+
+    .pub-project-name {
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .pub-project-desc {
+      margin: 0;
+      font-size: var(--text-xs);
+      color: var(--c-sub);
+    }
+
+    .pub-project-policy {
+      font-size: var(--text-xs);
+      color: #334155;
+      font-weight: 600;
+    }
   </style>
 </head>
 
@@ -1098,60 +1170,7 @@
     <section class="kpi-grid" aria-label="Tổng quan số liệu" id="section-kpis" hidden></section>
 
     <!-- Chính sách hoa hồng dự án (Collapsible thu gọn tinh tế) -->
-    <section class="card policy-card" aria-labelledby="commission-policy-title" id="section-commission-policy" hidden>
-      <div class="policy-header-row">
-        <div class="policy-title-wrap">
-          <h2 class="section-title policy-title" id="commission-policy-title">💰 Chính sách hoa hồng dự án</h2>
-          <span class="policy-summary-badge" id="policy-summary-badge">VietCredit · TNEX (2%)</span>
-        </div>
-        <button type="button" class="btn-toggle-policy" id="btn-toggle-policy" aria-expanded="false"
-          aria-controls="policy-content-box">
-          <span id="policy-toggle-text">Xem chi tiết</span>
-          <span class="policy-chevron" id="policy-chevron">▾</span>
-        </button>
-      </div>
-
-      <div class="policy-content-box" id="policy-content-box" hidden>
-        <div class="projects-policy-grid">
-          <!-- Dự án 1: VietCredit -->
-          <div class="project-policy-card">
-            <div class="project-policy-top">
-              <span class="project-tag tag-loan">Vay tín chấp</span>
-              <strong class="project-name">Tin Vay VietCredit</strong>
-            </div>
-            <p class="project-policy-sub">Tỷ lệ theo phân loại rủi ro khách hàng:</p>
-            <div class="risk-tiers-row">
-              <div class="risk-tier-item">
-                <span class="risk-tag risk-tag-low">Thấp (Low)</span>
-                <span class="rate-badge" id="rate-vietcredit-low">1,80%</span>
-              </div>
-              <div class="risk-tier-item">
-                <span class="risk-tag risk-tag-medium">TB (Medium)</span>
-                <span class="rate-badge" id="rate-vietcredit-medium">1,28%</span>
-              </div>
-              <div class="risk-tier-item">
-                <span class="risk-tag risk-tag-high">Cao (High)</span>
-                <span class="rate-badge" id="rate-vietcredit-high">1,00%</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Dự án 2: TNEX -->
-          <div class="project-policy-card">
-            <div class="project-policy-top">
-              <span class="project-tag tag-bank">Ngân hàng số</span>
-              <strong class="project-name">TNEX</strong>
-            </div>
-            <p class="project-policy-sub">Mở tài khoản thanh toán / eKYC</p>
-            <div class="fixed-tier-row">
-              <span class="fixed-rate-label">Hoa hồng CTV:</span>
-              <span class="rate-highlight">2,00%</span>
-            </div>
-          </div>
-        </div>
-        <p class="commission-note">* Hoa hồng chưa gồm VAT 10%. Đối soát và thanh toán minh bạch theo kỳ.</p>
-      </div>
-    </section>
+    
 
     <!-- Đơn hàng / Transactions -->
     <section class="card" aria-labelledby="orders-section-title" id="section-orders" hidden>
@@ -1165,6 +1184,40 @@
       </div>
       <div class="order-list-box" id="order-list-box"></div>
       <button type="button" class="btn-secondary btn-full" id="btn-show-more" hidden>Xem thêm</button>
+    </section>
+
+    <!-- 4. Các dự án affiliate tài chính dành cho Pub (Nằm dưới Lịch sử đơn hàng) -->
+    <section class="card pub-projects-card" id="section-projects-pub" aria-labelledby="projects-pub-title">
+      <div class="pub-projects-header">
+        <h2 class="section-title pub-projects-title" id="projects-pub-title">💼 Các dự án affiliate tài chính dành cho Pub</h2>
+        <p class="pub-projects-sub">Các chiến dịch tài chính đang hợp tác và ghi nhận đơn tự động qua AccessTrade</p>
+      </div>
+
+      <div class="pub-projects-grid">
+        <!-- Dự án 1: VietCredit -->
+        <div class="pub-project-item">
+          <div class="pub-project-top">
+            <span class="pub-project-tag">Vay tiêu dùng</span>
+            <strong class="pub-project-name">VietCredit - Công ty Tài chính Cổ phần Tín Việt</strong>
+          </div>
+          <p class="pub-project-desc">Chiến dịch Vay tín chấp &amp; Thẻ vay tiêu dùng Tín Việt.</p>
+          <div class="pub-project-policy">
+            <span>📌 Chính sách:</span> Ghi nhận đơn thật và đối soát tự động từ AccessTrade.
+          </div>
+        </div>
+
+        <!-- Dự án 2: TNEX -->
+        <div class="pub-project-item">
+          <div class="pub-project-top">
+            <span class="pub-project-tag">Ngân hàng số</span>
+            <strong class="pub-project-name">TNEX - Ngân hàng số Hàng Hải (MSB)</strong>
+          </div>
+          <p class="pub-project-desc">Chiến dịch Mở tài khoản thanh toán / eKYC ngân hàng MSB.</p>
+          <div class="pub-project-policy">
+            <span>📌 Chính sách:</span> Ghi nhận đơn thật và đối soát tự động từ AccessTrade.
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Thẻ ẩn tương thích ngược với unit tests -->
@@ -1896,8 +1949,7 @@
         var cleanBase = String(API_BASE || "").trim().replace(/\/+$/, "");
         var proto = window.location && window.location.protocol;
         var isHttpPage = proto === "http:" || proto === "https:";
-        var forceDemo =
-          locInfo.isDemoParam || (!cleanBase && !state.viewCode && !locInfo.hasExplicitInput);
+        var forceDemo = Boolean(locInfo.isDemoParam);
 
         if (!forceDemo && locInfo.hasExplicitInput && !locInfo.isValid && !state.viewCode) {
           state.loading = false;
@@ -1965,14 +2017,7 @@
             typeof resp.headers.get === "function" &&
             resp.headers.get("x-ctv-bridge") === "1";
 
-          if (useSameOriginBridge && !hasBridgeHeader) {
-            state.loading = false;
-            state.errorKind = "";
-            state.isDemo = true;
-            state.data = buildDemoData();
-            renderCurrentView();
-            return;
-          }
+          // Keep response even without special header in production
 
           if (resp.status === 404) {
             state.loading = false;
@@ -1997,14 +2042,6 @@
           state.errorKind = "";
           renderCurrentView();
         } catch (_err) {
-          if (useSameOriginBridge) {
-            state.loading = false;
-            state.errorKind = "";
-            state.isDemo = true;
-            state.data = buildDemoData();
-            renderCurrentView();
-            return;
-          }
           state.loading = false;
           state.errorKind = "network";
           renderCurrentView();

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Máy chủ trung gian AccessTrade cho Dasboard Fin (Node 18+, không dùng thư viện ngoài)
  *
  * Hướng dẫn chạy nhanh:
@@ -114,7 +114,7 @@ const DEFAULT_PROJECT_NOTE =
 
 let bridgeRuntimeKey = "";
 let bridgeState = {
-  mode: "demo",
+  mode: "real",
   ctvList: [],
   ctvLinkConfig: {
     publisher: "",
@@ -195,8 +195,10 @@ function loadBridgeStateFromDisk() {
             ? parsed.ctvShortLinks
             : {},
         clickStats: sanitizeClickStatsMap(parsed.clickStats),
-        syncedLeads: Array.isArray(parsed.syncedLeads) ? parsed.syncedLeads : []
+        syncedLeads: Array.isArray(parsed.syncedLeads) ? parsed.syncedLeads : [],
+        accessKey: typeof parsed.accessKey === "string" ? parsed.accessKey.trim() : ""
       };
+      if (parsed.accessKey && !bridgeRuntimeKey) { bridgeRuntimeKey = parsed.accessKey.trim(); }
     }
   } catch (_err) {
     // Bỏ qua nếu file trạng thái cầu nối chưa tồn tại hoặc hỏng
@@ -212,6 +214,7 @@ function saveBridgeStateToDisk() {
       ctvShortLinks: bridgeState.ctvShortLinks,
       clickStats: sanitizeClickStatsMap(bridgeState.clickStats),
       policy: bridgeState.policy,
+      accessKey: bridgeRuntimeKey || bridgeState.accessKey || "",
       syncedLeads: bridgeState.syncedLeads
     };
     fs.writeFileSync(BRIDGE_STATE_PATH, JSON.stringify(safeCopy), "utf8");
@@ -1546,7 +1549,7 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
   let sourceLeads = Array.isArray(bridgeState.syncedLeads) ? bridgeState.syncedLeads : [];
   const effectiveKey = bridgeRuntimeKey || ENV_ACCESSTRADE_KEY || (bridgeState && bridgeState.accessKey);
 
-  if (bridgeState.mode === "real" && effectiveKey) {
+  if (effectiveKey) {
     try {
       const now = new Date();
       const start = new Date(now.getTime() - 29 * 86400000);
@@ -1843,7 +1846,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     bridgeState = {
-      mode: body.mode === "real" ? "real" : "demo",
+      mode: "real",
       ctvList: cleanCtvList,
       ctvLinkConfig: {
         publisher: typeof rawCfg.publisher === "string" ? rawCfg.publisher.trim() : "",
