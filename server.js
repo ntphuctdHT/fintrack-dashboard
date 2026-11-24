@@ -1879,7 +1879,11 @@ const server = http.createServer(async (req, res) => {
         leadRisks:
           rawPolicy.leadRisks && typeof rawPolicy.leadRisks === "object" && !Array.isArray(rawPolicy.leadRisks)
             ? rawPolicy.leadRisks
-            : {}
+            : {},
+        ctvBadges:
+          rawPolicy.ctvBadges && typeof rawPolicy.ctvBadges === "object" && !Array.isArray(rawPolicy.ctvBadges)
+            ? rawPolicy.ctvBadges
+            : (bridgeState.policy && bridgeState.policy.ctvBadges) || null
       },
       syncedLeads: cleanLeads,
       accessKey: bridgeRuntimeKey || (bridgeState && bridgeState.accessKey) || ""

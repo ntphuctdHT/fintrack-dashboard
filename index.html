@@ -5555,11 +5555,9 @@
             escapeHtml(item.displayTime) +
             "</span>" +
             '<div class="lead-badges">' +
-            '<span class="status-label ' +
-            split.riskMeta.cssClass +
-            '">' +
-            escapeHtml(split.riskMeta.icon + " " + split.riskMeta.label) +
-            "</span>" +
+            (item.campaignName && item.campaignName.toUpperCase().indexOf("TNEX") === -1
+              ? '<span class="status-label ' + split.riskMeta.cssClass + '">' + escapeHtml(split.riskMeta.icon + " " + split.riskMeta.label) + "</span>"
+              : "") +
             '<span class="status-label ' +
             item.statusInfo.cssClass +
             '">' +
