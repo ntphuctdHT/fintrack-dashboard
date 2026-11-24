@@ -17,63 +17,63 @@
     :root {
       color-scheme: light;
 
-      /* BẢNG MÀU CHUẨN 3 MÀU: NGỌC LAM NHẠT - XANH BIỂN TRẦM - XANH XÔ THƠM */
-      /* Nền trang: #EAF2F2 mát dịu pha chút kem sữa */
-      --color-bg: #EAF2F2;
-      --color-bg-page: #EAF2F2;
+      /* BẢNG MÀU CHUẨN 3 MÀU: NGỌC BẠC HÀ NHẠT - XANH BIỂN SÂU - CAM ĐẤT ẤM */
+      /* Nền trang: #E8F5F3 thoáng nhẹ */
+      --color-bg: #E8F5F3;
+      --color-bg-page: #E8F5F3;
 
       /* Gradient header & banner */
-      --gradient-header: linear-gradient(135deg, #DCECEB 0%, #EAF2F2 50%, #F4F8F8 100%);
-      --color-header-start: #DCECEB;
-      --color-header-mid: #EAF2F2;
-      --color-header-end: #F4F8F8;
+      --gradient-header: linear-gradient(135deg, #D4EDE8 0%, #E8F5F3 50%, #F3FAF9 100%);
+      --color-header-start: #D4EDE8;
+      --color-header-mid: #E8F5F3;
+      --color-header-end: #F3FAF9;
 
-      /* Thẻ: nền trắng #FFFFFF, viền #D1E3E2, bóng nhẹ */
+      /* Thẻ: nền trắng #FFFFFF, viền #D2E8E4, bóng nhẹ */
       --color-surface: #FFFFFF;
-      --color-surface-muted: #E2ECEB;
-      --color-border: #D1E3E2;
-      --color-border-strong: #B5D2D0;
-      --color-shadow: rgba(29, 63, 84, 0.05);
+      --color-surface-muted: #E1F2EF;
+      --color-border: #D2E8E4;
+      --color-border-strong: #B2D8D1;
+      --color-shadow: rgba(22, 58, 82, 0.05);
 
-      /* Thẻ "Hoa hồng CTV" / Nổi bật: nền mềm xanh xô thơm pha ngọc lam */
-      --color-surface-cream: #E5F1EE;
-      --color-border-cream: #C2DFDA;
+      /* Thẻ "Hoa hồng CTV" / Nổi bật: nền cam đất pha kem sữa #FDF5F0, viền #F5DCD0 */
+      --color-surface-cream: #FDF5F0;
+      --color-border-cream: #F5DCD0;
 
-      /* Chữ: tiêu đề #1D3F54 (Xanh biển trầm), nội dung #243B4A, chữ phụ và metadata #4D6A7A */
-      --color-text-title: #1D3F54;
-      --color-text: #243B4A;
-      --color-text-muted: #4D6A7A;
+      /* Chữ: tiêu đề #163A52 (Xanh biển sâu), nội dung #23495F, chữ phụ và metadata #4A6D80 */
+      --color-text-title: #163A52;
+      --color-text: #23495F;
+      --color-text-muted: #4A6D80;
 
-      /* Xanh xô thơm chủ đạo: #2A7B6F (hover #22645A, nền mềm #E5F1EE) */
-      --color-primary: #2A7B6F;
-      --color-primary-hover: #22645A;
-      --color-primary-soft: #E5F1EE;
-      --color-primary-text: #2A7B6F;
+      /* Cam đất ấm chủ đạo: #C26D3A (hover #A85B2D, nền mềm #FDF5F0) */
+      --color-primary: #C26D3A;
+      --color-primary-hover: #A85B2D;
+      --color-primary-soft: #FDF5F0;
+      --color-primary-text: #C26D3A;
       --color-on-primary: #FFFFFF;
-      --color-primary-solid: #2A7B6F;
+      --color-primary-solid: #C26D3A;
 
-      /* Xanh biển trầm: #1D3F54 (hover #163243) */
-      --color-navy: #1D3F54;
-      --color-navy-hover: #163243;
-      --color-navy-soft: #EAF2F2;
+      /* Xanh biển sâu: #163A52 */
+      --color-navy: #163A52;
+      --color-navy-hover: #0E293B;
+      --color-navy-soft: #E8F5F3;
 
       /* Trạng thái */
-      --color-success: #2A7B6F;
-      --color-success-hover: #22645A;
-      --color-success-soft: #E5F1EE;
-      --color-success-text: #2A7B6F;
+      --color-success: #163A52;
+      --color-success-hover: #0E293B;
+      --color-success-soft: #E1F2EF;
+      --color-success-text: #163A52;
 
-      --color-warning: #4D6A7A;
-      --color-warning-soft: #EAF2F2;
-      --color-warning-text: #4D6A7A;
-      --color-warning-border: #D1E3E2;
+      --color-warning: #4A6D80;
+      --color-warning-soft: #E8F5F3;
+      --color-warning-text: #4A6D80;
+      --color-warning-border: #D2E8E4;
 
-      --color-error: #1D3F54;
-      --color-error-soft: #1D3F54;
+      --color-error: #C26D3A;
+      --color-error-soft: #C26D3A;
       --color-error-text: #FFFFFF;
-      --color-error-border: #1D3F54;
+      --color-error-border: #C26D3A;
 
-      --color-bar-track: #D1E3E2;
+      --color-bar-track: #D2E8E4;
 
       /* Hệ thống khoảng cách (bội của 4px) */
       --space-1: 4px;
@@ -110,87 +110,87 @@
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         color-scheme: light;
-        --color-bg: #EAF2F2;
-        --color-bg-page: #EAF2F2;
-        --gradient-header: linear-gradient(135deg, #DCECEB 0%, #EAF2F2 50%, #F4F8F8 100%);
-        --color-header-start: #DCECEB;
-        --color-header-mid: #EAF2F2;
-        --color-header-end: #F4F8F8;
+        --color-bg: #E8F5F3;
+        --color-bg-page: #E8F5F3;
+        --gradient-header: linear-gradient(135deg, #D4EDE8 0%, #E8F5F3 50%, #F3FAF9 100%);
+        --color-header-start: #D4EDE8;
+        --color-header-mid: #E8F5F3;
+        --color-header-end: #F3FAF9;
         --color-surface: #FFFFFF;
-        --color-surface-muted: #E2ECEB;
-        --color-border: #D1E3E2;
-        --color-border-strong: #B5D2D0;
-        --color-shadow: rgba(29, 63, 84, 0.05);
-        --color-surface-cream: #E5F1EE;
-        --color-border-cream: #C2DFDA;
-        --color-text-title: #1D3F54;
-        --color-text: #243B4A;
-        --color-text-muted: #4D6A7A;
-        --color-primary: #2A7B6F;
-        --color-primary-hover: #22645A;
-        --color-primary-soft: #E5F1EE;
-        --color-primary-text: #2A7B6F;
+        --color-surface-muted: #E1F2EF;
+        --color-border: #D2E8E4;
+        --color-border-strong: #B2D8D1;
+        --color-shadow: rgba(22, 58, 82, 0.05);
+        --color-surface-cream: #FDF5F0;
+        --color-border-cream: #F5DCD0;
+        --color-text-title: #163A52;
+        --color-text: #23495F;
+        --color-text-muted: #4A6D80;
+        --color-primary: #C26D3A;
+        --color-primary-hover: #A85B2D;
+        --color-primary-soft: #FDF5F0;
+        --color-primary-text: #C26D3A;
         --color-on-primary: #FFFFFF;
-        --color-primary-solid: #2A7B6F;
-        --color-navy: #1D3F54;
-        --color-navy-hover: #163243;
-        --color-navy-soft: #EAF2F2;
-        --color-success: #2A7B6F;
-        --color-success-hover: #22645A;
-        --color-success-soft: #E5F1EE;
-        --color-success-text: #2A7B6F;
-        --color-warning: #4D6A7A;
-        --color-warning-soft: #EAF2F2;
-        --color-warning-text: #4D6A7A;
-        --color-warning-border: #D1E3E2;
-        --color-error: #1D3F54;
-        --color-error-soft: #1D3F54;
+        --color-primary-solid: #C26D3A;
+        --color-navy: #163A52;
+        --color-navy-hover: #0E293B;
+        --color-navy-soft: #E8F5F3;
+        --color-success: #163A52;
+        --color-success-hover: #0E293B;
+        --color-success-soft: #E1F2EF;
+        --color-success-text: #163A52;
+        --color-warning: #4A6D80;
+        --color-warning-soft: #E8F5F3;
+        --color-warning-text: #4A6D80;
+        --color-warning-border: #D2E8E4;
+        --color-error: #C26D3A;
+        --color-error-soft: #C26D3A;
         --color-error-text: #FFFFFF;
-        --color-error-border: #1D3F54;
-        --color-bar-track: #D1E3E2;
+        --color-error-border: #C26D3A;
+        --color-bar-track: #D2E8E4;
       }
     }
 
     :root[data-theme="dark"] {
       color-scheme: light;
-      --color-bg: #EAF2F2;
-      --color-bg-page: #EAF2F2;
-      --gradient-header: linear-gradient(135deg, #DCECEB 0%, #EAF2F2 50%, #F4F8F8 100%);
-      --color-header-start: #DCECEB;
-      --color-header-mid: #EAF2F2;
-      --color-header-end: #F4F8F8;
+      --color-bg: #E8F5F3;
+      --color-bg-page: #E8F5F3;
+      --gradient-header: linear-gradient(135deg, #D4EDE8 0%, #E8F5F3 50%, #F3FAF9 100%);
+      --color-header-start: #D4EDE8;
+      --color-header-mid: #E8F5F3;
+      --color-header-end: #F3FAF9;
       --color-surface: #FFFFFF;
-      --color-surface-muted: #E2ECEB;
-      --color-border: #D1E3E2;
-      --color-border-strong: #B5D2D0;
-      --color-shadow: rgba(29, 63, 84, 0.05);
-      --color-surface-cream: #E5F1EE;
-      --color-border-cream: #C2DFDA;
-      --color-text-title: #1D3F54;
-      --color-text: #243B4A;
-      --color-text-muted: #4D6A7A;
-      --color-primary: #2A7B6F;
-      --color-primary-hover: #22645A;
-      --color-primary-soft: #E5F1EE;
-      --color-primary-text: #2A7B6F;
+      --color-surface-muted: #E1F2EF;
+      --color-border: #D2E8E4;
+      --color-border-strong: #B2D8D1;
+      --color-shadow: rgba(22, 58, 82, 0.05);
+      --color-surface-cream: #FDF5F0;
+      --color-border-cream: #F5DCD0;
+      --color-text-title: #163A52;
+      --color-text: #23495F;
+      --color-text-muted: #4A6D80;
+      --color-primary: #C26D3A;
+      --color-primary-hover: #A85B2D;
+      --color-primary-soft: #FDF5F0;
+      --color-primary-text: #C26D3A;
       --color-on-primary: #FFFFFF;
-      --color-primary-solid: #2A7B6F;
-      --color-navy: #1D3F54;
-      --color-navy-hover: #163243;
-      --color-navy-soft: #EAF2F2;
-      --color-success: #2A7B6F;
-      --color-success-hover: #22645A;
-      --color-success-soft: #E5F1EE;
-      --color-success-text: #2A7B6F;
-      --color-warning: #4D6A7A;
-      --color-warning-soft: #EAF2F2;
-      --color-warning-text: #4D6A7A;
-      --color-warning-border: #D1E3E2;
-      --color-error: #1D3F54;
-      --color-error-soft: #1D3F54;
+      --color-primary-solid: #C26D3A;
+      --color-navy: #163A52;
+      --color-navy-hover: #0E293B;
+      --color-navy-soft: #E8F5F3;
+      --color-success: #163A52;
+      --color-success-hover: #0E293B;
+      --color-success-soft: #E1F2EF;
+      --color-success-text: #163A52;
+      --color-warning: #4A6D80;
+      --color-warning-soft: #E8F5F3;
+      --color-warning-text: #4A6D80;
+      --color-warning-border: #D2E8E4;
+      --color-error: #C26D3A;
+      --color-error-soft: #C26D3A;
       --color-error-text: #FFFFFF;
-      --color-error-border: #1D3F54;
-      --color-bar-track: #D1E3E2;
+      --color-error-border: #C26D3A;
+      --color-bar-track: #D2E8E4;
     }
 
     *,
@@ -1295,9 +1295,13 @@
     }
 
     .sidebar-nav-item[aria-current="page"] {
-      background-color: var(--color-primary);
-      color: #ffffff;
+      background-color: #ffffff;
+      color: var(--color-navy);
       font-weight: 700;
+    }
+
+    .sidebar-nav-item[aria-current="page"] .sidebar-nav-icon {
+      stroke: var(--color-navy);
     }
 
     .sidebar-nav-icon {
@@ -1321,9 +1325,58 @@
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background-color: var(--color-primary);
+      background-color: #10B981;
       border: 1.5px solid #ffffff;
       flex-shrink: 0;
+    }
+
+    /* Badge toggles in settings */
+    .ctv-badges-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: var(--space-3);
+      margin: var(--space-2) 0 var(--space-4);
+    }
+
+    .toggle-badge-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-3);
+      background-color: var(--color-surface-muted);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color var(--transition-fast), background-color var(--transition-fast);
+    }
+
+    .toggle-badge-item:hover {
+      border-color: var(--color-primary);
+    }
+
+    .badge-checkbox {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      accent-color: var(--color-primary);
+      cursor: pointer;
+    }
+
+    .badge-toggle-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .badge-toggle-text strong {
+      font-size: var(--text-sm);
+      color: var(--color-text-title);
+    }
+
+    .badge-toggle-text small {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
     }
 
     /* Desktop layout switch */
@@ -1875,8 +1928,6 @@
               aria-pressed="false">VietCredit</button>
             <button type="button" class="filter-btn filter-btn-project" data-project="tnex"
               aria-pressed="false">TNEX</button>
-            <button type="button" class="filter-btn filter-btn-project" data-project="vpbank"
-              aria-pressed="false">VPBank</button>
           </div>
 
           <div class="card lead-list-card" id="lead-list-container"></div>
@@ -2015,6 +2066,86 @@
               Lưu cấu hình chia hoa hồng
             </button>
             <div id="ctv-policy-feedback" role="status" aria-live="polite" hidden></div>
+          </form>
+
+          <form class="card settings-form" id="ctv-badges-form" novalidate>
+            <div>
+              <h2 class="card-title" id="ctv-badges-heading">Hiển thị thẻ số liệu (Badge) trên trang CTV</h2>
+              <p class="field-hint">
+                Bật hoặc tắt 8 thẻ số liệu hiển thị cho CTV. Thay đổi sẽ áp dụng ngay khi CTV mở trang.
+              </p>
+            </div>
+
+            <div class="ctv-badges-grid">
+              <label class="toggle-badge-item">
+                <input type="checkbox" id="badge-toggle-clicks" name="clicks" class="badge-checkbox" checked />
+                <span class="badge-toggle-text">
+                  <strong>Lượt nhấp link</strong>
+                  <small>Tổng số lần click vào link của CTV</small>
+                </span>
+              </label>
+
+              <label class="toggle-badge-item">
+                <input type="checkbox" id="badge-toggle-clicksToday" name="clicksToday" class="badge-checkbox" checked />
+                <span class="badge-toggle-text">
+                  <strong>Nhấp hôm nay</strong>
+                  <small>Số lượt nhấp phát sinh trong ngày</small>
+                </span>
+              </label>
+
+              <label class="toggle-badge-item">
+                <input type="checkbox" id="badge-toggle-total" name="total" class="badge-checkbox" checked />
+                <span class="badge-toggle-text">
+                  <strong>Tổng hồ sơ</strong>
+                  <small>Tổng số lượng đơn phát sinh</small>
+                </span>
+              </label>
+
+              <label class="toggle-badge-item">
+                <input type="checkbox" id="badge-toggle-pending" name="pending" class="badge-checkbox" checked />
+                <span class="badge-toggle-text">
+                  <strong>Chờ duyệt</strong>
+                  <small>Đơn chưa duyệt trạng thái</small>
+                </span>
+              </label>
+
+              <label class="toggle-badge-item">
+                <input type="checkbox" id="badge-toggle-approved" name="approved" class="badge-checkbox" checked />
+                <span class="badge-toggle-text">
+                  <strong>Đã duyệt</strong>
+                  <small>Đơn đã được phê duyệt thành công</small>
+                </span>
+              </label>
+
+              <label class="toggle-badge-item">
+                <input type="checkbox" id="badge-toggle-reconciled" name="reconciled" class="badge-checkbox" checked />
+                <span class="badge-toggle-text">
+                  <strong>Đã đối soát</strong>
+                  <small>Đơn đã hoàn tất đối soát</small>
+                </span>
+              </label>
+
+              <label class="toggle-badge-item">
+                <input type="checkbox" id="badge-toggle-cancelled" name="cancelled" class="badge-checkbox" checked />
+                <span class="badge-toggle-text">
+                  <strong>Đã huỷ</strong>
+                  <small>Đơn bị từ chối / huỷ bỏ</small>
+                </span>
+              </label>
+
+              <label class="toggle-badge-item">
+                <input type="checkbox" id="badge-toggle-commission" name="commission" class="badge-checkbox" checked />
+                <span class="badge-toggle-text">
+                  <strong>Hoa hồng của bạn</strong>
+                  <small>Tổng tiền hoa hồng tạm tính của CTV</small>
+                </span>
+              </label>
+            </div>
+
+            <button type="submit" class="primary-btn" id="btn-save-ctv-badges">
+              Lưu cấu hình hiển thị thẻ
+            </button>
+            <div id="ctv-badges-feedback" role="status" aria-live="polite" hidden></div>
           </form>
 
           <section class="card" aria-labelledby="theme-heading">
@@ -2293,7 +2424,7 @@
       "use strict";
 
       var BRAND = {
-        name: "Dasboard PUB",
+        name: "Dashboard PUB",
         slogan: "",
         logoUrl: ""
       };
@@ -2304,6 +2435,7 @@
       var CTV_LINK_CONFIG_STORAGE_KEY = "dasboard_fin_ctv_link_config_v1";
       var CTV_LIST_STORAGE_KEY = "dasboard_fin_ctv_list_v1";
       var CTV_SHORT_LINKS_STORAGE_KEY = "dasboard_fin_ctv_short_links_v1";
+      var CTV_BADGES_STORAGE_KEY = "dasboard_fin_ctv_badges_v1";
       var VALID_SALES_LINK_MODES = ["short_auto", "short_isgd", "short_accesstrade", "full"];
       var CTV_CHARSET = "abcdefghjkmnpqrstuvwxyz23456789";
       var DEFAULT_AT_RATES = { low: 2.45, medium: 1.93, high: 1.58 };
@@ -2325,6 +2457,16 @@
         atRates: { low: 2.45, medium: 1.93, high: 1.58 },
         ctvRates: { low: 1.8, medium: 1.28, high: 1.0 },
         leadRisks: {},
+        ctvBadges: {
+          clicks: true,
+          clicksToday: true,
+          total: true,
+          pending: true,
+          approved: true,
+          reconciled: true,
+          cancelled: true,
+          commission: true
+        },
         ctvLinkConfig: {
           publisher: "",
           campaign: "",
@@ -2569,12 +2711,9 @@
         if (!Number.isFinite(atRate) || atRate <= 0) atRate = DEFAULT_AT_RATES[riskKey];
         if (!Number.isFinite(ctvRate) || ctvRate < 0) ctvRate = DEFAULT_CTV_RATES[riskKey];
 
-        // Áp dụng hoa hồng theo từng dự án: TNEX (2%), VPBank (2%), VietCredit (theo rủi ro)
+        // Áp dụng hoa hồng theo từng dự án: TNEX (2%), VietCredit (theo rủi ro)
         var campUpper = String((lead && lead.campaignName) || "").toUpperCase();
         if (campUpper.indexOf("TNEX") !== -1) {
-          ctvRate = 2.0;
-          atRate = 2.5;
-        } else if (campUpper.indexOf("VPBANK") !== -1 || campUpper.indexOf("VP BANK") !== -1) {
           ctvRate = 2.0;
           atRate = 2.5;
         }
@@ -3657,7 +3796,7 @@
         return (
           "Chào " +
           ctv.name +
-          ", đây là 2 link của riêng bạn:\n" +
+          " · Trạng thái đơn Pub của bạn. Dưới đây là 2 link của riêng bạn:\n" +
           "- Link bán hàng (gửi cho khách): " +
           salesLink +
           "\n" +
@@ -3872,7 +4011,7 @@
 
         var raw = [
           { id: "DEMO-001", merchant: "Tin Vay VietCredit", transaction_time: isoDaysAgo(0, 11, 20), commission: 350000, status: 0, is_confirmed: 0, sub2: "CTV-A", risk_level: "high" },
-          { id: "DEMO-002", merchant: "Thẻ tín dụng VPBank", transaction_time: isoDaysAgo(0, 9, 15), commission: 480000, status: 1, is_confirmed: 0, sub2: "CTV-B", risk_level: "medium" },
+          { id: "DEMO-002", merchant: "Tin Vay VietCredit", transaction_time: isoDaysAgo(0, 9, 15), commission: 480000, status: 1, is_confirmed: 0, sub2: "CTV-B", risk_level: "medium" },
           { id: "DEMO-003", merchant: "Mở tài khoản TNEX", transaction_time: isoDaysAgo(1, 16, 40), commission: 120000, status: 1, is_confirmed: 1, sub2: "CTV-A", risk_level: "low" },
           { id: "DEMO-004", merchant: "Tin Vay VietCredit", transaction_time: isoDaysAgo(1, 14, 10), commission: 350000, status: 1, is_confirmed: 0, sub2: "CTV-C", risk_level: "high" },
           { id: "DEMO-005", merchant: "Vay tiêu dùng Shinhan", transaction_time: isoDaysAgo(2, 10, 5), commission: 550000, status: 0, is_confirmed: 0, sub2: "CTV-A", risk_level: "high" },
@@ -3881,7 +4020,7 @@
           { id: "DEMO-008", merchant: "Mở tài khoản TNEX", transaction_time: isoDaysAgo(3, 8, 45), commission: 85000, status: 1, is_confirmed: 0, sub2: "CTV-C", risk_level: "low" },
           { id: "DEMO-009", merchant: "Vay nhanh FeCredit", transaction_time: isoDaysAgo(4, 17, 20), commission: 420000, status: 0, is_confirmed: 0, sub2: "CTV-B", risk_level: "high" },
           { id: "DEMO-010", merchant: "Thẻ tín dụng Techcombank", transaction_time: isoDaysAgo(4, 11, 15), commission: 600000, status: 1, is_confirmed: 1, sub2: "CTV-A", risk_level: "medium" },
-          { id: "DEMO-011", merchant: "Mở tài khoản VPBank NEO", transaction_time: isoDaysAgo(5, 14, 30), commission: 95000, status: 1, is_confirmed: 0, sub2: "CTV-C", risk_level: "low" },
+          { id: "DEMO-011", merchant: "Mở tài khoản TNEX", transaction_time: isoDaysAgo(5, 14, 30), commission: 95000, status: 1, is_confirmed: 0, sub2: "CTV-C", risk_level: "low" },
           { id: "DEMO-012", merchant: "Tin Vay VietCredit", transaction_time: isoDaysAgo(5, 10, 0), commission: 350000, status: 2, is_confirmed: 0, sub2: "CTV-B", risk_level: "high" },
           { id: "DEMO-013", merchant: "Thẻ tín dụng Sacombank", transaction_time: isoDaysAgo(6, 16, 45), commission: 450000, status: 1, is_confirmed: 1, sub2: "CTV-A", risk_level: "medium" },
           { id: "DEMO-014", merchant: "Mở tài khoản KBank", transaction_time: isoDaysAgo(6, 9, 30), commission: 110000, status: 0, is_confirmed: 0, sub2: "CTV-C", risk_level: "low" },
@@ -4034,6 +4173,18 @@
         } catch (_errShortLinks) {
           // Bỏ qua lỗi localStorage
         }
+
+        try {
+          var rawBadges = window.localStorage.getItem(CTV_BADGES_STORAGE_KEY);
+          if (rawBadges) {
+            var parsedBadges = JSON.parse(rawBadges);
+            if (parsedBadges && typeof parsedBadges === "object") {
+              state.ctvBadges = Object.assign({}, state.ctvBadges, parsedBadges);
+            }
+          }
+        } catch (_errBadges) {
+          // Bỏ qua lỗi localStorage
+        }
       }
 
       function saveSettingsToStorage() {
@@ -4060,8 +4211,21 @@
               ctvField: state.ctvField,
               defaultRisk: state.defaultRisk,
               atRates: state.atRates,
-              ctvRates: state.ctvRates
+              ctvRates: state.ctvRates,
+              ctvBadges: state.ctvBadges
             })
+          );
+          return true;
+        } catch (_err) {
+          return false;
+        }
+      }
+
+      function saveCtvBadgesToStorage() {
+        try {
+          window.localStorage.setItem(
+            CTV_BADGES_STORAGE_KEY,
+            JSON.stringify(state.ctvBadges)
           );
           return true;
         } catch (_err) {
@@ -4329,7 +4493,8 @@
                   defaultRisk: state.defaultRisk,
                   atRates: state.atRates,
                   ctvRates: state.ctvRates,
-                  leadRisks: state.leadRisks
+                  leadRisks: state.leadRisks,
+                  ctvBadges: state.ctvBadges
                 },
                 leads: compactLeads
               })
@@ -5219,6 +5384,16 @@
           saveBtn.disabled = state.loading;
           saveBtn.textContent = state.loading ? "Đang tải..." : "Lưu và tải lại";
         }
+
+        // Populate badge checkboxes from state.ctvBadges
+        var badgeKeys = ["clicks", "clicksToday", "total", "pending", "approved", "reconciled", "cancelled", "commission"];
+        for (var bi = 0; bi < badgeKeys.length; bi++) {
+          var bk = badgeKeys[bi];
+          var chk = document.getElementById("badge-toggle-" + bk);
+          if (chk) {
+            chk.checked = state.ctvBadges[bk] !== false;
+          }
+        }
       }
 
       function showFeedbackBox(elId, kind, message) {
@@ -5242,6 +5417,10 @@
 
       function showCtvPolicyFeedback(kind, message) {
         showFeedbackBox("ctv-policy-feedback", kind, message);
+      }
+
+      function showCtvBadgesFeedback(kind, message) {
+        showFeedbackBox("ctv-badges-feedback", kind, message);
       }
 
       function showExportCtvFeedback(kind, message) {
@@ -6202,6 +6381,24 @@
               "success",
               "Đã lưu cấu hình chia hoa hồng và cập nhật số liệu."
             );
+          });
+        }
+
+        var ctvBadgesForm = document.getElementById("ctv-badges-form");
+        if (ctvBadgesForm) {
+          ctvBadgesForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+            var badgeKeys = ["clicks", "clicksToday", "total", "pending", "approved", "reconciled", "cancelled", "commission"];
+            var nextBadges = {};
+            for (var bi = 0; bi < badgeKeys.length; bi++) {
+              var bk = badgeKeys[bi];
+              var chk = document.getElementById("badge-toggle-" + bk);
+              nextBadges[bk] = chk ? chk.checked : true;
+            }
+            state.ctvBadges = nextBadges;
+            saveCtvBadgesToStorage();
+            syncCtvBridgeToServer();
+            showCtvBadgesFeedback("success", "Đã lưu cấu hình hiển thị thẻ cho CTV.");
           });
         }
 

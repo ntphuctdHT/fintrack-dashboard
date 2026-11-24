@@ -1637,7 +1637,8 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
       low:    Number(ctvRates.low)    > 0 ? Number(ctvRates.low)    : DEFAULT_CTV_RATES.low,
       medium: Number(ctvRates.medium) > 0 ? Number(ctvRates.medium) : DEFAULT_CTV_RATES.medium,
       high:   Number(ctvRates.high)   > 0 ? Number(ctvRates.high)   : DEFAULT_CTV_RATES.high
-    }
+    },
+    badges: (bridgeState.policy && bridgeState.policy.ctvBadges) || null
   };
 }
 
