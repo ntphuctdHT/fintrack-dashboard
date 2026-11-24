@@ -1736,20 +1736,30 @@
       display: flex;
       flex-direction: column;
       gap: var(--space-2);
-      margin-top: var(--space-3);
+      margin-top: var(--space-2);
     }
 
     .extra-stat-row {
       display: grid;
-      grid-template-columns: 24px 140px 1fr;
+      grid-template-columns: 24px minmax(180px, 240px) 1fr;
       align-items: center;
-      gap: var(--space-2);
+      gap: var(--space-3);
       padding: var(--space-2) var(--space-3);
       background-color: var(--c-bg);
       border: 1px solid var(--c-border);
       border-radius: var(--radius-sm);
       font-size: var(--text-sm);
       cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+
+    .extra-stat-row:hover {
+      background-color: var(--c-hover);
+    }
+
+    .extra-stat-label {
+      font-weight: 600;
+      color: var(--c-ink);
     }
 
     .extra-stat-row input[type="checkbox"] {
@@ -1759,13 +1769,25 @@
     }
 
     .extra-stat-num {
-      padding: 6px 10px;
+      padding: 6px 12px;
       font-size: var(--text-sm);
+      border-radius: var(--radius-sm);
     }
 
     .extra-stat-num:disabled {
-      opacity: 0.4;
+      opacity: 0.45;
       background-color: transparent;
+      cursor: not-allowed;
+    }
+
+    @media (max-width: 600px) {
+      .extra-stat-row {
+        grid-template-columns: 24px 1fr;
+        grid-template-rows: auto auto;
+      }
+      .extra-stat-num {
+        grid-column: 1 / -1;
+      }
     }
 
     /* ===== Chân trang tinh tế & Lưu ý ngắn gọn (Admin) ===== */
@@ -2505,39 +2527,43 @@
               <select class="select-input" id="extra-stats-ctv-select">
                 <option value="">-- Chọn một cộng tác viên --</option>
               </select>
+              <p class="field-hint">Chọn bạn CTV cần điều chỉnh số liệu hiển thị trên dashboard riêng.</p>
             </div>
 
-            <div id="extra-stats-fields" hidden>
+            <div id="extra-stats-fields">
+              <p class="field-hint" style="margin-top: 12px; margin-bottom: 6px; font-weight: 700; color: var(--c-ink);">
+                Bảng 6 tiêu chí cộng thêm (Tích chọn để bật và nhập số liệu tương ứng):
+              </p>
               <div class="extra-stats-grid">
                 <label class="extra-stat-row">
                   <input type="checkbox" class="extra-stat-chk" data-stat="total" />
-                  <span>Tổng hồ sơ</span>
-                  <input type="number" class="text-input extra-stat-num" data-stat="total" min="0" placeholder="Số lượng cộng thêm" disabled />
+                  <span class="extra-stat-label">1. Tổng hồ sơ (total)</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="total" min="0" placeholder="Chọn CTV ở trên trước" disabled />
                 </label>
                 <label class="extra-stat-row">
                   <input type="checkbox" class="extra-stat-chk" data-stat="pending" />
-                  <span>Chờ duyệt</span>
-                  <input type="number" class="text-input extra-stat-num" data-stat="pending" min="0" placeholder="Số lượng cộng thêm" disabled />
+                  <span class="extra-stat-label">2. Chờ duyệt (pending)</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="pending" min="0" placeholder="Chọn CTV ở trên trước" disabled />
                 </label>
                 <label class="extra-stat-row">
                   <input type="checkbox" class="extra-stat-chk" data-stat="approved" />
-                  <span>Đã duyệt</span>
-                  <input type="number" class="text-input extra-stat-num" data-stat="approved" min="0" placeholder="Số lượng cộng thêm" disabled />
+                  <span class="extra-stat-label">3. Đã duyệt (approved)</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="approved" min="0" placeholder="Chọn CTV ở trên trước" disabled />
                 </label>
                 <label class="extra-stat-row">
                   <input type="checkbox" class="extra-stat-chk" data-stat="reconciled" />
-                  <span>Đã đối soát</span>
-                  <input type="number" class="text-input extra-stat-num" data-stat="reconciled" min="0" placeholder="Số lượng cộng thêm" disabled />
+                  <span class="extra-stat-label">4. Đã đối soát (reconciled)</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="reconciled" min="0" placeholder="Chọn CTV ở trên trước" disabled />
                 </label>
                 <label class="extra-stat-row">
                   <input type="checkbox" class="extra-stat-chk" data-stat="cancelled" />
-                  <span>Đã huỷ</span>
-                  <input type="number" class="text-input extra-stat-num" data-stat="cancelled" min="0" placeholder="Số lượng cộng thêm" disabled />
+                  <span class="extra-stat-label">5. Đã huỷ (cancelled)</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="cancelled" min="0" placeholder="Chọn CTV ở trên trước" disabled />
                 </label>
                 <label class="extra-stat-row">
                   <input type="checkbox" class="extra-stat-chk" data-stat="commission" />
-                  <span>Hoa hồng (₫)</span>
-                  <input type="number" class="text-input extra-stat-num" data-stat="commission" min="0" placeholder="Số tiền cộng thêm (VNĐ)" disabled />
+                  <span class="extra-stat-label">6. Hoa hồng (₫) (commission)</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="commission" min="0" placeholder="Chọn CTV ở trên trước" disabled />
                 </label>
               </div>
 
@@ -5949,8 +5975,62 @@
           tnexLinkEl.value = (state.projectLinks && state.projectLinks.tnex) || "";
         }
 
-        if (typeof populateExtraStatsCtvSelect === "function") {
-          populateExtraStatsCtvSelect();
+        populateExtraStatsCtvSelect();
+      }
+
+      function populateExtraStatsCtvSelect() {
+        var sel = document.getElementById("extra-stats-ctv-select");
+        if (!sel) return;
+        var prev = sel.value;
+        sel.innerHTML = '<option value="">-- Chọn một cộng tác viên --</option>';
+
+        var list = Array.isArray(state.ctvList) ? state.ctvList : [];
+        if (list.length === 0) {
+          try {
+            var raw = window.localStorage.getItem(CTV_LIST_STORAGE_KEY);
+            if (raw) {
+              var parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                list = parsed;
+              }
+            }
+          } catch (_e) {}
+        }
+
+        for (var i = 0; i < list.length; i++) {
+          var ctv = list[i];
+          if (!ctv || !ctv.ref) continue;
+          var opt = document.createElement("option");
+          opt.value = ctv.ref;
+          var hasExtra = state.ctvExtraStats && state.ctvExtraStats[ctv.ref];
+          var extraMark = hasExtra ? " ★ (Đang có số liệu cộng thêm)" : "";
+          var statusMark = ctv.active === false ? " [Đã nghỉ]" : "";
+          opt.textContent = (ctv.name || "CTV") + " (" + ctv.ref + ")" + statusMark + extraMark;
+          sel.appendChild(opt);
+        }
+
+        if (prev && sel.querySelector('option[value="' + prev + '"]')) {
+          sel.value = prev;
+        }
+      }
+
+      function loadExtraStatsToForm(ref) {
+        var entry = (ref && state.ctvExtraStats && state.ctvExtraStats[ref]) || {};
+        var statKeys = ["total", "pending", "approved", "reconciled", "cancelled", "commission"];
+        for (var i = 0; i < statKeys.length; i++) {
+          var k = statKeys[i];
+          var chk = document.querySelector(".extra-stat-chk[data-stat='" + k + "']");
+          var num = document.querySelector(".extra-stat-num[data-stat='" + k + "']");
+          var e = entry[k];
+          var enabled = Boolean(ref && e && e.enabled);
+          if (chk) chk.checked = enabled;
+          if (num) {
+            num.value = enabled && e.value !== undefined ? e.value : "";
+            num.disabled = !enabled;
+            num.placeholder = ref
+              ? (k === "commission" ? "Nhập số tiền VNĐ cộng thêm" : "Nhập số lượng cộng thêm")
+              : "Chọn CTV ở trên trước";
+          }
         }
       }
 
@@ -6783,6 +6863,13 @@
           fetchCtvClicksFromServer();
         }
 
+        if (tabName === "settings") {
+          renderSettingsInputs();
+          populateExtraStatsCtvSelect();
+          var curSel = document.getElementById("extra-stats-ctv-select");
+          loadExtraStatsToForm(curSel ? curSel.value : "");
+        }
+
         var mainEl = document.getElementById("app-main");
         if (mainEl) mainEl.scrollTop = 0;
       }
@@ -6793,6 +6880,7 @@
         renderLeads();
         renderCtvPanel();
         renderSettingsInputs();
+        populateExtraStatsCtvSelect();
       }
 
       /* ===== Gắn sự kiện ===== */
@@ -7080,47 +7168,10 @@
         }
 
         // ===== Chức năng: Thêm số liệu vào bảng dashboard CTV =====
-        function populateExtraStatsCtvSelect() {
-          var sel = document.getElementById("extra-stats-ctv-select");
-          if (!sel) return;
-          var prev = sel.value;
-          sel.innerHTML = '<option value="">-- Chọn một cộng tác viên --</option>';
-          if (Array.isArray(state.ctvList)) {
-            state.ctvList.forEach(function (ctv) {
-              if (ctv && ctv.ref) {
-                var opt = document.createElement("option");
-                opt.value = ctv.ref;
-                var hasExtra = state.ctvExtraStats && state.ctvExtraStats[ctv.ref];
-                var extraMark = hasExtra ? " ★ (Đang có số liệu cộng thêm)" : "";
-                opt.textContent = (ctv.name || "CTV") + " (" + ctv.ref + ")" + extraMark;
-                sel.appendChild(opt);
-              }
-            });
-          }
-          if (prev) sel.value = prev;
-        }
-
-        function loadExtraStatsToForm(ref) {
-          var fieldsDiv = document.getElementById("extra-stats-fields");
-          if (!fieldsDiv) return;
-          if (!ref) {
-            fieldsDiv.hidden = true;
-            return;
-          }
-          var entry = (state.ctvExtraStats && state.ctvExtraStats[ref]) || {};
-          var statKeys = ["total", "pending", "approved", "reconciled", "cancelled", "commission"];
-          statKeys.forEach(function (k) {
-            var chk = document.querySelector(".extra-stat-chk[data-stat='" + k + "']");
-            var num = document.querySelector(".extra-stat-num[data-stat='" + k + "']");
-            var e = entry[k];
-            var enabled = Boolean(e && e.enabled);
-            if (chk) chk.checked = enabled;
-            if (num) {
-              num.value = enabled && e.value !== undefined ? e.value : "";
-              num.disabled = !enabled;
-            }
-          });
-          fieldsDiv.hidden = false;
+        populateExtraStatsCtvSelect();
+        var initialExtraSel = document.getElementById("extra-stats-ctv-select");
+        if (initialExtraSel && initialExtraSel.value) {
+          loadExtraStatsToForm(initialExtraSel.value);
         }
 
         var extraStatsCtvSel = document.getElementById("extra-stats-ctv-select");
@@ -7129,16 +7180,29 @@
             loadExtraStatsToForm(this.value);
             showFeedbackBox("extra-stats-feedback", "", "");
           });
+          extraStatsCtvSel.addEventListener("focus", populateExtraStatsCtvSelect);
+          extraStatsCtvSel.addEventListener("mousedown", populateExtraStatsCtvSelect);
         }
 
         document.querySelectorAll(".extra-stat-chk").forEach(function (chk) {
           chk.addEventListener("change", function () {
+            var sel = document.getElementById("extra-stats-ctv-select");
+            var ref = sel ? sel.value : "";
+            if (!ref && this.checked) {
+              this.checked = false;
+              showToast("warning", "Vui lòng chọn một cộng tác viên ở menu phía trên trước.");
+              if (sel) sel.focus();
+              return;
+            }
             var key = this.getAttribute("data-stat");
             var num = document.querySelector(".extra-stat-num[data-stat='" + key + "']");
             if (num) {
               num.disabled = !this.checked;
-              if (this.checked && !num.value) {
-                num.focus();
+              if (this.checked) {
+                num.placeholder = key === "commission" ? "Nhập số tiền VNĐ cộng thêm" : "Nhập số lượng cộng thêm";
+                if (!num.value) num.focus();
+              } else {
+                num.value = "";
               }
             }
           });
