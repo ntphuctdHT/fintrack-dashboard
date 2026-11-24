@@ -1551,6 +1551,48 @@
       font-size: var(--text-base);
     }
 
+    .ctv-guide-box {
+      margin-top: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      background-color: var(--bg-nav);
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .ctv-guide-line {
+      margin: 0;
+      font-size: var(--text-xs);
+      line-height: 1.45;
+      color: var(--text-main);
+    }
+
+    .ctv-guide-line code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 4px;
+      background-color: var(--bg-card);
+      color: var(--text-main);
+    }
+
+    .ctv-backup-section {
+      margin-top: var(--space-4);
+      padding: var(--space-4);
+      border-top: 1px solid var(--bg-nav);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .ctv-backup-title {
+      margin: 0;
+      font-size: var(--text-base);
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
     /* Toast & Confirm Dialog */
     .app-toast {
       position: fixed;
@@ -1818,7 +1860,7 @@
             <path d="M9 12h6" />
             <path d="M9 16h6" />
           </svg>
-          Hồ sơ
+          Đơn hàng (Transaction)
         </button>
         <button type="button" class="sidebar-nav-item" id="sidebar-tab-ctv" data-tab="ctv">
           <svg class="sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -1880,11 +1922,11 @@
           </p>
         </section>
 
-        <!-- MÀN 2: HỒ SƠ -->
+        <!-- MÀN 2: HỒ SƠ / TRANSACTIONS -->
         <section id="panel-leads" class="screen-panel" aria-labelledby="heading-leads" hidden>
           <div>
-            <h1 class="section-heading" id="heading-leads">Danh sách hồ sơ</h1>
-            <p class="section-sub" id="leads-subtitle">Mới nhất hiển thị ở trên</p>
+            <h1 class="section-heading" id="heading-leads">Đơn hàng (Transactions)</h1>
+            <p class="section-sub" id="leads-subtitle">Dữ liệu đơn hàng thật từ AccessTrade API (/v1/transactions)</p>
           </div>
 
           <section class="card settings-form" id="export-ctv-card" aria-labelledby="export-ctv-heading">
@@ -2184,172 +2226,167 @@
             <p class="section-sub">Tạo link bán hàng và mã xem riêng cho từng cộng tác viên</p>
           </div>
 
-          <!-- Khối a: Cấu hình link -->
+          <!-- Khối 1: Cấu hình link -->
           <form class="card settings-form" id="ctv-link-config-form" novalidate>
             <div>
-              <h2 class="card-title">Cấu hình link</h2>
+              <h2 class="card-title">Cấu hình link chiến dịch &amp; CTV</h2>
               <p class="field-hint">
-                Nhập một lần và lưu lại để dùng chung khi sao chép link cho các CTV.
+                Thiết lập link chiến dịch AccessTrade và link web xem để hệ thống tự động gán mã CTV (sub2) vào link bán hàng và trang xem hoa hồng.
               </p>
             </div>
             <div id="ctv-link-config-feedback" hidden></div>
-            <div class="policy-group">
-              <label class="field-label" for="input-ctv-sample-link">Dán nhanh link AccessTrade mẫu (khuyên
-                dùng)</label>
-              <p class="field-hint">
-                Bạn có thể dán link rút gọn <strong>https://shorten.asia/...</strong> hoặc link đầy đủ
-                (<strong>go.isclix.com/deep_link/...</strong>, <strong>click.accesstrade.vn/...</strong>) lấy từ
-                pub2.accesstrade.vn. Hệ thống sẽ tự giải mã ra đúng dãy số Mã publisher, Mã chiến dịch và Link đích để
-                gắn riêng mã sub2 cho từng CTV.
-              </p>
+
+            <div class="field-group">
+              <label class="field-label" for="input-ctv-sample-link">1. Link chiến dịch AccessTrade (Khuyên dùng)</label>
               <div class="input-row">
                 <input class="text-input" id="input-ctv-sample-link" type="url" inputmode="url" autocomplete="off"
                   placeholder="https://shorten.asia/... hoặc https://go.isclix.com/deep_link/..." />
                 <button type="button" class="secondary-btn" id="btn-parse-ctv-sample">Tự tách mã</button>
               </div>
-              <button type="button" class="secondary-btn" id="btn-fetch-ctv-link-api">
-                Tự lấy link từ AccessTrade API (dùng Access Key đã lưu)
-              </button>
-            </div>
-            <div class="lead-editor-grid">
-              <div class="field-group">
-                <label class="field-label" for="input-ctv-publisher">Mã publisher (dãy số trong link, không phải
-                  AT...)</label>
-                <input class="text-input" id="input-ctv-publisher" name="publisher" type="text" inputmode="numeric"
-                  autocomplete="off" placeholder="Ví dụ: 4608706208340350795" />
-                <p class="field-hint">
-                  Là dãy số 19 chữ số nằm sau /deep_link/ trong link AccessTrade (khác với tên tài khoản AT...).
-                </p>
-              </div>
-              <div class="field-group">
-                <label class="field-label" for="input-ctv-campaign">Mã chiến dịch (dãy số)</label>
-                <input class="text-input" id="input-ctv-campaign" name="campaign" type="text" inputmode="numeric"
-                  autocomplete="off" placeholder="Ví dụ: 6997817930567730686" />
-                <p class="field-hint">
-                  Dãy số ID chiến dịch trên AccessTrade (hoặc dùng nút Tự tách mã ở trên).
-                </p>
+              <div class="ctv-guide-box">
+                <p class="ctv-guide-line">📌 <strong>Dùng làm gì:</strong> Làm link mẫu để hệ thống tự động gán mã riêng (<code>sub2</code>) của từng CTV vào link chiến dịch, giúp AccessTrade ghi nhận đơn hàng chính xác cho CTV đó.</p>
+                <p class="ctv-guide-line">📍 <strong>Lấy ở đâu:</strong> Vào <code>pub2.accesstrade.vn</code> → <strong>Chiến dịch</strong> (VPBank, Cake, MB...) → Bấm <strong>Tạo link</strong> → Tích chọn <strong>Tạo link rút gọn</strong> rồi bấm Tạo link → Sao chép link (dạng <code>https://shorten.asia/...</code>) dán vào đây và bấm <strong>Tự tách mã</strong>.</p>
               </div>
             </div>
+
             <div class="field-group">
-              <label class="field-label" for="input-ctv-target-url">Link đích của sản phẩm</label>
-              <input class="text-input" id="input-ctv-target-url" name="targetUrl" type="url" inputmode="url"
-                autocomplete="off" placeholder="https://example.com/san-pham" />
+              <label class="field-label" for="input-ctv-view-base">2. Địa chỉ web xem của CTV (Dashboard)</label>
+              <div class="input-row">
+                <input class="text-input" id="input-ctv-view-base" name="viewBase" type="url" inputmode="url"
+                  autocomplete="off" placeholder="https://ten-web-dashboard-cua-ban" />
+                <button type="button" class="secondary-btn" id="btn-use-current-view-base">Lấy link web này</button>
+              </div>
+              <div class="ctv-guide-box">
+                <p class="ctv-guide-line">📌 <strong>Dùng làm gì:</strong> Địa chỉ website gốc để tạo link dashboard riêng gửi cho CTV xem hoa hồng và đơn hàng của họ (dạng <code>.../xem/[mã-ctv]</code>).</p>
+                <p class="ctv-guide-line">📍 <strong>Lấy ở đâu:</strong> Bấm nút <strong>Lấy link web này</strong> để hệ thống tự điền theo địa chỉ web hiện tại (chỉ cần sửa khi bạn dùng tên miền riêng hoặc Vercel khác).</p>
+              </div>
             </div>
+
+            <!-- Tuỳ chọn nâng cao (giữ nguyên đầy đủ ID cho JS và kiểm thử) -->
             <details class="advanced-details" id="ctv-base-link-details">
-              <summary class="advanced-summary">Tuỳ chọn: Link affiliate gốc (cho click.accesstrade.vn hoặc
-                deep_link/v2)</summary>
+              <summary class="advanced-summary">⚙️ Tuỳ chọn nâng cao (Mã Publisher, Chiến dịch, Kiểu rút gọn)</summary>
               <div class="advanced-body">
+                <div class="lead-editor-grid">
+                  <div class="field-group">
+                    <label class="field-label" for="input-ctv-publisher">Mã publisher (19 chữ số)</label>
+                    <input class="text-input" id="input-ctv-publisher" name="publisher" type="text" inputmode="numeric"
+                      autocomplete="off" placeholder="Ví dụ: 4608706208340350795" />
+                    <p class="field-hint">
+                      Dãy số 19 chữ số nằm sau /deep_link/ trong link AccessTrade (khác với tên tài khoản AT...).
+                    </p>
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label" for="input-ctv-campaign">Mã chiến dịch (dãy số)</label>
+                    <input class="text-input" id="input-ctv-campaign" name="campaign" type="text" inputmode="numeric"
+                      autocomplete="off" placeholder="Ví dụ: 6997817930567730686" />
+                    <p class="field-hint">
+                      Dãy số ID chiến dịch trên AccessTrade (hệ thống tự điền khi bấm Tự tách mã).
+                    </p>
+                  </div>
+                </div>
+
                 <div class="field-group">
-                  <label class="field-label" for="input-ctv-base-link">Link affiliate gốc</label>
+                  <label class="field-label" for="input-ctv-target-url">Link đích của sản phẩm</label>
+                  <input class="text-input" id="input-ctv-target-url" name="targetUrl" type="url" inputmode="url"
+                    autocomplete="off" placeholder="https://example.com/san-pham" />
+                </div>
+
+                <div class="field-group">
+                  <label class="field-label" for="input-ctv-base-link">Link affiliate gốc (nếu dùng)</label>
                   <input class="text-input" id="input-ctv-base-link" name="baseSalesLink" type="url" inputmode="url"
                     autocomplete="off" placeholder="Để trống nếu dùng Mã publisher + Mã chiến dịch ở trên" />
                   <p class="field-hint">
                     Khi dán link shorten.asia, deep_link/v6 hoặc click.accesstrade.vn, hệ thống giữ nguyên link gốc tại
-                    đây để bảo toàn đầy đủ tham số chiến dịch và chỉ thay sub2 cho từng CTV. Nếu muốn tự nhập chiến dịch
-                    khác bằng 3 ô ở trên, hãy bấm nút xoá bên dưới.
+                    đây để bảo toàn đầy đủ tham số chiến dịch và chỉ thay sub2 cho từng CTV.
                   </p>
+                  <button type="button" class="secondary-btn" id="btn-clear-ctv-base-link">
+                    Xoá link gốc (dùng 3 ô ở trên)
+                  </button>
                 </div>
-                <button type="button" class="secondary-btn" id="btn-clear-ctv-base-link">
-                  Xoá link gốc (dùng 3 ô ở trên)
+
+                <div class="field-group">
+                  <label class="field-label" for="select-ctv-sales-link-mode">Kiểu link bán hàng đầu ra (cho CTV)</label>
+                  <select class="select-input" id="select-ctv-sales-link-mode" name="salesLinkMode">
+                    <option value="short_auto">Link rút gọn tự động (ưu tiên AccessTrade shorten.asia → is.gd)</option>
+                    <option value="short_isgd">Link rút gọn is.gd (giữ nguyên 100% link gốc + sub2)</option>
+                    <option value="short_accesstrade">Link rút gọn chính chủ AccessTrade (cần Access Key)</option>
+                    <option value="full">Link đầy đủ (go.isclix.com/...&amp;sub2=...)</option>
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label class="checkbox-row" for="input-ctv-track-clicks">
+                    <input type="checkbox" id="input-ctv-track-clicks" name="trackClicks" checked />
+                    <span>Đếm lượt nhấp thật qua máy chủ (/l/&lt;mã&gt; → AccessTrade)</span>
+                  </label>
+                </div>
+
+                <button type="button" class="secondary-btn" id="btn-fetch-ctv-link-api">
+                  Tự lấy link từ AccessTrade API (dùng Access Key đã lưu)
                 </button>
               </div>
             </details>
-            <div class="field-group">
-              <label class="field-label" for="select-ctv-sales-link-mode">Kiểu link bán hàng đầu ra (cho CTV)</label>
-              <select class="select-input" id="select-ctv-sales-link-mode" name="salesLinkMode">
-                <option value="short_auto">Link rút gọn tự động (ưu tiên AccessTrade shorten.asia → is.gd)</option>
-                <option value="short_isgd">Link rút gọn is.gd (giữ nguyên 100% link gốc + sub2)</option>
-                <option value="short_accesstrade">Link rút gọn chính chủ AccessTrade (cần Access Key)</option>
-                <option value="full">Link đầy đủ (go.isclix.com/...&amp;sub2=...)</option>
-              </select>
-              <p class="field-hint">
-                Ở chế độ link rút gọn, hệ thống tự động tạo link ngắn riêng đã gắn sẵn mã CTV và lưu lại để bấm sao chép
-                dùng ngay.
-              </p>
-            </div>
-            <div class="field-group">
-              <label class="field-label" for="input-ctv-view-base">Địa chỉ trang xem dashboard của CTV (tự động
-                điền)</label>
-              <div class="input-row">
-                <input class="text-input" id="input-ctv-view-base" name="viewBase" type="url" inputmode="url"
-                  autocomplete="off" placeholder="https://ten-web-dashboard-cua-ban" />
-                <button type="button" class="secondary-btn" id="btn-use-current-view-base">Dùng trang này</button>
-              </div>
-              <p class="field-hint">
-                Mặc định dùng địa chỉ web hiện tại cho trang xem (/xem/&lt;mã&gt;) và link đếm nhấp (/l/&lt;mã&gt;). Nếu
-                gửi link ra ngoài từ AI Studio, hãy dán Shared App URL (ais-pre-...) hoặc tên miền công khai. Không dán
-                link go.isclix.com / shorten.asia vào ô này.
-              </p>
-            </div>
-            <div class="field-group">
-              <label class="checkbox-row" for="input-ctv-track-clicks">
-                <input type="checkbox" id="input-ctv-track-clicks" name="trackClicks" checked />
-                <span>Đếm lượt nhấp thật qua máy chủ (/l/&lt;mã&gt; → AccessTrade)</span>
-              </label>
-              <p class="field-hint">
-                Khi bật, link bán hàng đi qua máy chủ này để đếm số lượt nhấp thật rồi chuyển hướng ngay sang
-                AccessTrade giữ đúng mã CTV (sub2).
-              </p>
-            </div>
+
             <div class="ctv-code-box" id="ctv-link-preview-box" hidden></div>
             <button type="submit" class="primary-btn" id="btn-save-ctv-link-config">
-              Lưu cấu hình
+              💾 Lưu cấu hình link
             </button>
           </form>
 
-          <!-- Khối b: Thêm CTV mới -->
+          <!-- Khối 2: Thêm mới CTV -->
           <form class="card settings-form" id="ctv-add-form" novalidate>
             <div>
-              <h2 class="card-title">Thêm CTV mới</h2>
+              <h2 class="card-title">Thêm mới Cộng tác viên (CTV)</h2>
               <p class="field-hint">
-                Chỉ lưu biệt danh, mã bán hàng (8 ký tự) và mã xem (24 ký tự); không lưu thông tin cá nhân.
+                Nhập tên hoặc biệt danh để tạo ngay mã bán hàng riêng và link theo dõi đơn hàng cho từng CTV.
               </p>
             </div>
             <div class="field-group">
-              <label class="field-label" for="input-ctv-nickname">Biệt danh (không cần tên thật)</label>
+              <label class="field-label" for="input-ctv-nickname">Tên hoặc Biệt danh CTV</label>
               <input class="text-input" id="input-ctv-nickname" name="nickname" type="text" maxlength="40"
-                autocomplete="off" placeholder="Tối đa 40 ký tự" />
+                autocomplete="off" placeholder="Ví dụ: Minh Anh, CTV Hà Nội, Nam Nguyễn..." />
             </div>
             <button type="submit" class="primary-btn" id="btn-create-ctv">
-              Tạo mã CTV
+              + Tạo mã CTV ngay
             </button>
+            <p class="field-hint">
+              💡 Mỗi CTV sẽ được cấp 1 mã bán hàng riêng (gắn vào link chiến dịch) và 1 đường link xem dashboard riêng tư (chỉ xem được đơn hàng của họ).
+            </p>
           </form>
 
-          <!-- Khối c: Danh sách CTV -->
+          <!-- Khối 3: Danh sách & Quản lý CTV -->
           <section class="card lead-list-card" aria-labelledby="ctv-list-heading">
             <div class="ctv-search-wrap">
-              <h2 class="card-title" id="ctv-list-heading">Danh sách CTV</h2>
+              <h2 class="card-title" id="ctv-list-heading">Danh sách &amp; Quản lý CTV</h2>
               <div class="field-group">
-                <label class="field-label" for="input-ctv-search">Tìm CTV</label>
+                <label class="field-label" for="input-ctv-search">Tìm kiếm CTV</label>
                 <input class="text-input" id="input-ctv-search" type="search" autocomplete="off"
-                  placeholder="Nhập biệt danh CTV để lọc..." />
+                  placeholder="Nhập tên hoặc biệt danh CTV để lọc..." />
               </div>
               <p class="ctv-list-count" id="ctv-list-count"></p>
             </div>
             <div id="ctv-list-container"></div>
-          </section>
 
-          <!-- Khối d: Sao lưu -->
-          <section class="card settings-form" aria-labelledby="ctv-backup-heading">
-            <div>
-              <h2 class="card-title" id="ctv-backup-heading">Sao lưu</h2>
-            </div>
-            <div class="notice notice-warning">
-              <p class="notice-body">
-                Danh sách chỉ lưu trong trình duyệt của máy này. Hãy tải file sao lưu sau mỗi lần thêm hoặc đổi CTV. Mất
-                file là mất mã.
-              </p>
-            </div>
-            <button type="button" class="primary-btn" id="btn-download-ctv-backup">
-              Tải file sao lưu
-            </button>
-            <div class="field-group ctv-restore-label">
-              <label class="field-label" for="input-restore-ctv-backup">Khôi phục từ file sao lưu</label>
-              <input class="file-input" id="input-restore-ctv-backup" type="file" accept="application/json,.json" />
-              <p class="field-hint">
-                Chọn file JSON đã sao lưu trước đó. Hệ thống sẽ kiểm tra chặt định dạng trước khi hỏi xác nhận thay toàn
-                bộ danh sách.
-              </p>
+            <!-- Khối 4: Sao lưu & Khôi phục dữ liệu CTV -->
+            <div class="ctv-backup-section">
+              <h3 class="ctv-backup-title" id="ctv-backup-heading">Sao lưu &amp; Khôi phục dữ liệu CTV</h3>
+              <div class="notice notice-warning">
+                <p class="notice-body">
+                  Danh sách chỉ lưu trong trình duyệt của máy này. Hãy tải file sao lưu sau mỗi lần thêm hoặc đổi CTV. Mất
+                  file là mất mã.
+                </p>
+              </div>
+              <button type="button" class="secondary-btn" id="btn-download-ctv-backup">
+                Tải file sao lưu
+              </button>
+              <div class="field-group ctv-restore-label">
+                <label class="field-label" for="input-restore-ctv-backup">Khôi phục từ file sao lưu</label>
+                <input class="file-input" id="input-restore-ctv-backup" type="file" accept="application/json,.json" />
+                <p class="field-hint">
+                  Chọn file JSON đã sao lưu trước đó. Hệ thống sẽ kiểm tra chặt định dạng trước khi hỏi xác nhận thay toàn
+                  bộ danh sách.
+                </p>
+              </div>
             </div>
           </section>
         </section>
@@ -2392,7 +2429,7 @@
             <path d="M9 12h6" />
             <path d="M9 16h6" />
           </svg>
-          <span>Hồ sơ</span>
+          <span>Đơn hàng</span>
         </button>
 
         <button type="button" class="tab-btn" id="tab-ctv" data-tab="ctv">
