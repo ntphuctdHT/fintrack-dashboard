@@ -1642,7 +1642,8 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
       high:   Number(ctvRates.high)   > 0 ? Number(ctvRates.high)   : DEFAULT_CTV_RATES.high
     },
     badges: (bridgeState.policy && bridgeState.policy.ctvBadges) || null,
-    project_links: (bridgeState.policy && bridgeState.policy.projectLinks) || {}
+    project_links: (bridgeState.policy && bridgeState.policy.projectLinks) || {},
+    extra_stats: (bridgeState.policy && bridgeState.policy.ctvExtraStats && bridgeState.policy.ctvExtraStats[ctv.ref]) || null
   };
 }
 
@@ -1896,7 +1897,11 @@ const server = http.createServer(async (req, res) => {
             typeof (rawPolicy.projectLinks && rawPolicy.projectLinks.tnex) === "string"
               ? rawPolicy.projectLinks.tnex.trim()
               : (bridgeState.policy && bridgeState.policy.projectLinks && bridgeState.policy.projectLinks.tnex) || ""
-        }
+        },
+        ctvExtraStats:
+          rawPolicy.ctvExtraStats && typeof rawPolicy.ctvExtraStats === "object" && !Array.isArray(rawPolicy.ctvExtraStats)
+            ? rawPolicy.ctvExtraStats
+            : (bridgeState.policy && bridgeState.policy.ctvExtraStats) || {}
       },
       syncedLeads: cleanLeads,
       accessKey: bridgeRuntimeKey || (bridgeState && bridgeState.accessKey) || ""

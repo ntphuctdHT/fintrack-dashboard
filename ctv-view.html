@@ -1602,7 +1602,8 @@
             note: projectNote
           },
           commissionPolicy: commissionPolicy,
-          projectLinks: (raw.project_links && typeof raw.project_links === "object") ? raw.project_links : ((raw.projectLinks && typeof raw.projectLinks === "object") ? raw.projectLinks : {})
+          projectLinks: (raw.project_links && typeof raw.project_links === "object") ? raw.project_links : ((raw.projectLinks && typeof raw.projectLinks === "object") ? raw.projectLinks : {}),
+          extraStats: (raw.extra_stats && typeof raw.extra_stats === "object" && !Array.isArray(raw.extra_stats)) ? raw.extra_stats : null
         };
       }
 
@@ -1891,15 +1892,28 @@
         setVisibleSections(true);
 
         if (kpiGrid) {
+          // Cộng thêm số liệu bổ sung nếu có (do admin cấu hình)
+          var displayTotals = Object.assign({}, data.totals);
+          if (data.extraStats && typeof data.extraStats === "object") {
+            var extraKeys = ["total", "pending", "approved", "reconciled", "cancelled", "commission"];
+            for (var ei = 0; ei < extraKeys.length; ei++) {
+              var ek = extraKeys[ei];
+              var eEntry = data.extraStats[ek];
+              if (eEntry && eEntry.enabled && Number(eEntry.value) > 0) {
+                displayTotals[ek] = (displayTotals[ek] || 0) + Math.round(Number(eEntry.value));
+              }
+            }
+          }
+
           var allCards = [
-            { key: "clicks", label: "Lượt nhấp link", value: data.totals.clicks.toLocaleString("vi-VN"), valCls: "kpi-val-clicks", cardCls: "" },
-            { key: "clicksToday", label: "Nhấp hôm nay", value: data.totals.clicksToday.toLocaleString("vi-VN"), valCls: "", cardCls: "" },
-            { key: "total", label: "Tổng hồ sơ", value: data.totals.total.toLocaleString("vi-VN"), valCls: "", cardCls: "" },
-            { key: "pending", label: "Chờ duyệt", value: data.totals.pending.toLocaleString("vi-VN"), valCls: "kpi-val-pending", cardCls: "" },
-            { key: "approved", label: "Đã duyệt", value: data.totals.approved.toLocaleString("vi-VN"), valCls: "kpi-val-approved", cardCls: "" },
-            { key: "reconciled", label: "Đã đối soát", value: data.totals.reconciled.toLocaleString("vi-VN"), valCls: "kpi-val-reconciled", cardCls: "" },
-            { key: "cancelled", label: "Đã huỷ", value: data.totals.cancelled.toLocaleString("vi-VN"), valCls: "kpi-val-cancelled", cardCls: "" },
-            { key: "commission", label: "Hoa hồng của bạn", value: formatVnd(data.totals.commission), valCls: "kpi-val-commission", cardCls: "kpi-card-highlight" }
+            { key: "clicks", label: "Lượt nhấp link", value: displayTotals.clicks.toLocaleString("vi-VN"), valCls: "kpi-val-clicks", cardCls: "" },
+            { key: "clicksToday", label: "Nhấp hôm nay", value: displayTotals.clicksToday.toLocaleString("vi-VN"), valCls: "", cardCls: "" },
+            { key: "total", label: "Tổng hồ sơ", value: displayTotals.total.toLocaleString("vi-VN"), valCls: "", cardCls: "" },
+            { key: "pending", label: "Chờ duyệt", value: displayTotals.pending.toLocaleString("vi-VN"), valCls: "kpi-val-pending", cardCls: "" },
+            { key: "approved", label: "Đã duyệt", value: displayTotals.approved.toLocaleString("vi-VN"), valCls: "kpi-val-approved", cardCls: "" },
+            { key: "reconciled", label: "Đã đối soát", value: displayTotals.reconciled.toLocaleString("vi-VN"), valCls: "kpi-val-reconciled", cardCls: "" },
+            { key: "cancelled", label: "Đã huỷ", value: displayTotals.cancelled.toLocaleString("vi-VN"), valCls: "kpi-val-cancelled", cardCls: "" },
+            { key: "commission", label: "Hoa hồng của bạn", value: formatVnd(displayTotals.commission), valCls: "kpi-val-commission", cardCls: "kpi-card-highlight" }
           ];
 
           var cards = allCards.filter(function (c) {

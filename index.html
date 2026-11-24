@@ -1732,6 +1732,42 @@
       white-space: nowrap;
     }
 
+    .extra-stats-grid {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+    }
+
+    .extra-stat-row {
+      display: grid;
+      grid-template-columns: 24px 140px 1fr;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      background-color: var(--c-bg);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      cursor: pointer;
+    }
+
+    .extra-stat-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .extra-stat-num {
+      padding: 6px 10px;
+      font-size: var(--text-sm);
+    }
+
+    .extra-stat-num:disabled {
+      opacity: 0.4;
+      background-color: transparent;
+    }
+
     /* ===== Chân trang tinh tế & Lưu ý ngắn gọn (Admin) ===== */
     .app-site-footer {
       margin-top: var(--space-6);
@@ -2456,6 +2492,63 @@
             <div id="project-links-feedback" role="status" aria-live="polite" hidden></div>
           </form>
 
+          <section class="card settings-form" id="section-ctv-extra-stats" aria-labelledby="extra-stats-heading">
+            <div>
+              <h2 class="card-title" id="extra-stats-heading">Thêm số liệu vào bảng dashboard cộng tác viên</h2>
+              <p class="field-hint">
+                Chọn CTV chỉ định để cộng thêm số liệu hiển thị trên trang dashboard của bạn đó. Dữ liệu gốc đồng bộ từ AccessTrade không bị thay đổi.
+              </p>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="extra-stats-ctv-select">Chọn CTV chỉ định áp dụng</label>
+              <select class="select-input" id="extra-stats-ctv-select">
+                <option value="">-- Chọn một cộng tác viên --</option>
+              </select>
+            </div>
+
+            <div id="extra-stats-fields" hidden>
+              <div class="extra-stats-grid">
+                <label class="extra-stat-row">
+                  <input type="checkbox" class="extra-stat-chk" data-stat="total" />
+                  <span>Tổng hồ sơ</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="total" min="0" placeholder="Số lượng cộng thêm" disabled />
+                </label>
+                <label class="extra-stat-row">
+                  <input type="checkbox" class="extra-stat-chk" data-stat="pending" />
+                  <span>Chờ duyệt</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="pending" min="0" placeholder="Số lượng cộng thêm" disabled />
+                </label>
+                <label class="extra-stat-row">
+                  <input type="checkbox" class="extra-stat-chk" data-stat="approved" />
+                  <span>Đã duyệt</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="approved" min="0" placeholder="Số lượng cộng thêm" disabled />
+                </label>
+                <label class="extra-stat-row">
+                  <input type="checkbox" class="extra-stat-chk" data-stat="reconciled" />
+                  <span>Đã đối soát</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="reconciled" min="0" placeholder="Số lượng cộng thêm" disabled />
+                </label>
+                <label class="extra-stat-row">
+                  <input type="checkbox" class="extra-stat-chk" data-stat="cancelled" />
+                  <span>Đã huỷ</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="cancelled" min="0" placeholder="Số lượng cộng thêm" disabled />
+                </label>
+                <label class="extra-stat-row">
+                  <input type="checkbox" class="extra-stat-chk" data-stat="commission" />
+                  <span>Hoa hồng (₫)</span>
+                  <input type="number" class="text-input extra-stat-num" data-stat="commission" min="0" placeholder="Số tiền cộng thêm (VNĐ)" disabled />
+                </label>
+              </div>
+
+              <div style="display:flex;gap:var(--space-2);margin-top:var(--space-3);flex-wrap:wrap;">
+                <button type="button" class="primary-btn btn-sm" id="btn-save-extra-stats">Lưu số liệu cộng thêm</button>
+                <button type="button" class="secondary-btn btn-sm" id="btn-clear-extra-stats">Xoá cộng thêm cho CTV này</button>
+              </div>
+              <div id="extra-stats-feedback" role="status" aria-live="polite" hidden></div>
+            </div>
+          </section>
+
           <section class="card" aria-labelledby="theme-heading">
             <h2 class="card-title" id="theme-heading">Giao diện Sáng / Tối</h2>
             <div class="theme-group" role="group" aria-label="Chọn giao diện sáng hoặc tối">
@@ -2778,6 +2871,7 @@
       var CTV_SHORT_LINKS_STORAGE_KEY = "dasboard_fin_ctv_short_links_v1";
       var CTV_BADGES_STORAGE_KEY = "dasboard_fin_ctv_badges_v1";
       var PROJECT_LINKS_STORAGE_KEY = "dasboard_fin_project_links_v1";
+      var CTV_EXTRA_STATS_STORAGE_KEY = "dasboard_fin_ctv_extra_stats_v1";
       var VALID_SALES_LINK_MODES = ["short_auto", "short_isgd", "short_accesstrade", "full"];
       var CTV_CHARSET = "abcdefghjkmnpqrstuvwxyz23456789";
       var DEFAULT_AT_RATES = { low: 2.45, medium: 1.93, high: 1.58 };
@@ -2814,6 +2908,7 @@
           vietcredit: "",
           tnex: ""
         },
+        ctvExtraStats: {},
         ctvLinkConfig: {
           publisher: "",
           campaign: "",
@@ -4544,6 +4639,18 @@
         } catch (_errProjLinks) {
           // Bỏ qua lỗi localStorage
         }
+
+        try {
+          var rawExtraStats = window.localStorage.getItem(CTV_EXTRA_STATS_STORAGE_KEY);
+          if (rawExtraStats) {
+            var parsedExtraStats = JSON.parse(rawExtraStats);
+            if (parsedExtraStats && typeof parsedExtraStats === "object") {
+              state.ctvExtraStats = Object.assign({}, state.ctvExtraStats, parsedExtraStats);
+            }
+          }
+        } catch (_errExtra) {
+          // Bỏ qua lỗi localStorage
+        }
       }
 
       function saveSettingsToStorage() {
@@ -4597,6 +4704,18 @@
           window.localStorage.setItem(
             PROJECT_LINKS_STORAGE_KEY,
             JSON.stringify(state.projectLinks)
+          );
+          return true;
+        } catch (_err) {
+          return false;
+        }
+      }
+
+      function saveCtvExtraStatsToStorage() {
+        try {
+          window.localStorage.setItem(
+            CTV_EXTRA_STATS_STORAGE_KEY,
+            JSON.stringify(state.ctvExtraStats)
           );
           return true;
         } catch (_err) {
@@ -4866,7 +4985,8 @@
                   ctvRates: state.ctvRates,
                   leadRisks: state.leadRisks,
                   ctvBadges: state.ctvBadges,
-                  projectLinks: state.projectLinks
+                  projectLinks: state.projectLinks,
+                  ctvExtraStats: state.ctvExtraStats
                 },
                 leads: compactLeads
               })
@@ -5827,6 +5947,10 @@
         }
         if (tnexLinkEl && document.activeElement !== tnexLinkEl) {
           tnexLinkEl.value = (state.projectLinks && state.projectLinks.tnex) || "";
+        }
+
+        if (typeof populateExtraStatsCtvSelect === "function") {
+          populateExtraStatsCtvSelect();
         }
       }
 
@@ -6952,6 +7076,127 @@
               tnexInput.value = "https://fast.accesstrade.com.vn/deep_link/6301306121406691458/494045799";
               showToast("info", "Đã điền link mẫu TNEX.");
             }
+          });
+        }
+
+        // ===== Chức năng: Thêm số liệu vào bảng dashboard CTV =====
+        function populateExtraStatsCtvSelect() {
+          var sel = document.getElementById("extra-stats-ctv-select");
+          if (!sel) return;
+          var prev = sel.value;
+          sel.innerHTML = '<option value="">-- Chọn một cộng tác viên --</option>';
+          if (Array.isArray(state.ctvList)) {
+            state.ctvList.forEach(function (ctv) {
+              if (ctv && ctv.ref) {
+                var opt = document.createElement("option");
+                opt.value = ctv.ref;
+                var hasExtra = state.ctvExtraStats && state.ctvExtraStats[ctv.ref];
+                var extraMark = hasExtra ? " ★ (Đang có số liệu cộng thêm)" : "";
+                opt.textContent = (ctv.name || "CTV") + " (" + ctv.ref + ")" + extraMark;
+                sel.appendChild(opt);
+              }
+            });
+          }
+          if (prev) sel.value = prev;
+        }
+
+        function loadExtraStatsToForm(ref) {
+          var fieldsDiv = document.getElementById("extra-stats-fields");
+          if (!fieldsDiv) return;
+          if (!ref) {
+            fieldsDiv.hidden = true;
+            return;
+          }
+          var entry = (state.ctvExtraStats && state.ctvExtraStats[ref]) || {};
+          var statKeys = ["total", "pending", "approved", "reconciled", "cancelled", "commission"];
+          statKeys.forEach(function (k) {
+            var chk = document.querySelector(".extra-stat-chk[data-stat='" + k + "']");
+            var num = document.querySelector(".extra-stat-num[data-stat='" + k + "']");
+            var e = entry[k];
+            var enabled = Boolean(e && e.enabled);
+            if (chk) chk.checked = enabled;
+            if (num) {
+              num.value = enabled && e.value !== undefined ? e.value : "";
+              num.disabled = !enabled;
+            }
+          });
+          fieldsDiv.hidden = false;
+        }
+
+        var extraStatsCtvSel = document.getElementById("extra-stats-ctv-select");
+        if (extraStatsCtvSel) {
+          extraStatsCtvSel.addEventListener("change", function () {
+            loadExtraStatsToForm(this.value);
+            showFeedbackBox("extra-stats-feedback", "", "");
+          });
+        }
+
+        document.querySelectorAll(".extra-stat-chk").forEach(function (chk) {
+          chk.addEventListener("change", function () {
+            var key = this.getAttribute("data-stat");
+            var num = document.querySelector(".extra-stat-num[data-stat='" + key + "']");
+            if (num) {
+              num.disabled = !this.checked;
+              if (this.checked && !num.value) {
+                num.focus();
+              }
+            }
+          });
+        });
+
+        var btnSaveExtra = document.getElementById("btn-save-extra-stats");
+        if (btnSaveExtra) {
+          btnSaveExtra.addEventListener("click", function () {
+            var sel = document.getElementById("extra-stats-ctv-select");
+            var ref = sel ? sel.value : "";
+            if (!ref) {
+              showToast("warning", "Vui lòng chọn CTV trước.");
+              return;
+            }
+            var statKeys = ["total", "pending", "approved", "reconciled", "cancelled", "commission"];
+            var entry = {};
+            var hasAny = false;
+            statKeys.forEach(function (k) {
+              var chk = document.querySelector(".extra-stat-chk[data-stat='" + k + "']");
+              var num = document.querySelector(".extra-stat-num[data-stat='" + k + "']");
+              var enabled = Boolean(chk && chk.checked);
+              var val = num ? Math.max(0, Math.round(Number(num.value) || 0)) : 0;
+              if (enabled) hasAny = true;
+              entry[k] = { enabled: enabled, value: val };
+            });
+            if (!state.ctvExtraStats) state.ctvExtraStats = {};
+            if (hasAny) {
+              state.ctvExtraStats[ref] = entry;
+            } else {
+              delete state.ctvExtraStats[ref];
+            }
+            saveCtvExtraStatsToStorage();
+            syncCtvBridgeToServer();
+            populateExtraStatsCtvSelect();
+            if (sel) sel.value = ref;
+            showFeedbackBox("extra-stats-feedback", "success", "Đã lưu số liệu cộng thêm cho CTV " + ref + ".");
+            showToast("success", "Đã lưu số liệu cộng thêm cho CTV.");
+          });
+        }
+
+        var btnClearExtra = document.getElementById("btn-clear-extra-stats");
+        if (btnClearExtra) {
+          btnClearExtra.addEventListener("click", function () {
+            var sel = document.getElementById("extra-stats-ctv-select");
+            var ref = sel ? sel.value : "";
+            if (!ref) {
+              showToast("warning", "Vui lòng chọn CTV trước.");
+              return;
+            }
+            if (!state.ctvExtraStats) state.ctvExtraStats = {};
+            delete state.ctvExtraStats[ref];
+            saveCtvExtraStatsToStorage();
+            syncCtvBridgeToServer();
+            loadExtraStatsToForm(ref);
+            populateExtraStatsCtvSelect();
+            if (sel) sel.value = ref;
+            showFeedbackBox("extra-stats-feedback", "success", "Đã xoá số liệu cộng thêm cho CTV " + ref + ".");
+            showToast("success", "Đã xoá số liệu cộng thêm.");
           });
         }
 
