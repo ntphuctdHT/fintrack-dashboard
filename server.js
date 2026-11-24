@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Máy chủ trung gian AccessTrade cho Dasboard Fin (Node 18+, không dùng thư viện ngoài)
  *
  * Hướng dẫn chạy nhanh:
@@ -1965,15 +1965,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Nếu policy chưa có hoặc accessKey trong RAM bị thiếu, lấy từ Supabase
-    if (!bridgeState.policy || !bridgeRuntimeKey) {
-      const dbSettings = await getSettingsFromSupabase();
-      if (dbSettings) {
-        if (dbSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettings.policy };
-        if (dbSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...dbSettings.ctvLinkConfig };
-        if (dbSettings.accessKey && !bridgeRuntimeKey) {
-          bridgeRuntimeKey = dbSettings.accessKey;
-        }
+    // Đồng bộ policy và cấu hình badge toggle mới nhất từ Supabase
+    const dbSettings = await getSettingsFromSupabase();
+    if (dbSettings) {
+      if (dbSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettings.policy };
+      if (dbSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...dbSettings.ctvLinkConfig };
+      if (dbSettings.accessKey && !bridgeRuntimeKey) {
+        bridgeRuntimeKey = dbSettings.accessKey;
       }
     }
 

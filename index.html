@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="vi">
 
 <head>
@@ -2737,6 +2737,7 @@
       var state = {
         activeTab: "overview",
         filterStatus: "all",
+        filterProject: "all",
         editingLeadId: null,
         mode: "real",
         accessKey: "",
@@ -5314,6 +5315,15 @@
           var matchesStatus =
             state.filterStatus === "all" || lead.statusInfo.key === state.filterStatus;
           if (!matchesStatus) return false;
+          if (state.filterProject && state.filterProject !== "all") {
+            var camp = (lead.campaignName || "").toUpperCase();
+            if (state.filterProject === "vietcredit" && camp.indexOf("VIETCREDIT") === -1 && camp.indexOf("TÍN VIỆT") === -1 && camp.indexOf("TIN VIET") === -1) {
+              return false;
+            }
+            if (state.filterProject === "tnex" && camp.indexOf("TNEX") === -1) {
+              return false;
+            }
+          }
           if (!state.leadSearchQuery) return true;
           var q = state.leadSearchQuery.toLowerCase();
           return (
@@ -5403,6 +5413,13 @@
           var btn = filterBtns[i];
           var fVal = btn.getAttribute("data-filter");
           btn.setAttribute("aria-pressed", fVal === state.filterStatus ? "true" : "false");
+        }
+
+        var projectFilterBtns = document.querySelectorAll("#project-filters .filter-btn-project");
+        for (var pfi = 0; pfi < projectFilterBtns.length; pfi++) {
+          var pbtn = projectFilterBtns[pfi];
+          var pVal = pbtn.getAttribute("data-project");
+          pbtn.setAttribute("aria-pressed", pVal === (state.filterProject || "all") ? "true" : "false");
         }
 
         var searchInput = document.getElementById("input-lead-search");
@@ -5508,12 +5525,14 @@
             metaParts.push(item.sub1);
           }
 
+          var isTnex = Boolean(item.campaignName && item.campaignName.toUpperCase().indexOf("TNEX") !== -1);
+
           html +=
             '<li class="lead-row">' +
-            '<button type="button" class="lead-row-btn" data-toggle-lead="' +
-            escapeHtml(item.conversionId) +
-            '" aria-expanded="' +
-            (isEditing ? "true" : "false") +
+            '<button type="button" class="lead-row-btn"' +
+            (!isTnex ? ' data-toggle-lead="' + escapeHtml(item.conversionId) + '"' : "") +
+            ' aria-expanded="' +
+            (isEditing && !isTnex ? "true" : "false") +
             '">' +
             '<div class="lead-top">' +
             '<p class="lead-campaign">' +
@@ -5555,7 +5574,7 @@
             escapeHtml(item.displayTime) +
             "</span>" +
             '<div class="lead-badges">' +
-            (item.campaignName && item.campaignName.toUpperCase().indexOf("TNEX") === -1
+            (!isTnex
               ? '<span class="status-label ' + split.riskMeta.cssClass + '">' + escapeHtml(split.riskMeta.icon + " " + split.riskMeta.label) + "</span>"
               : "") +
             '<span class="status-label ' +
@@ -5566,11 +5585,11 @@
             "</div>" +
             "</div>" +
             '<span class="lead-edit-hint">' +
-            (isEditing ? "Đang mở khung chỉnh mức rủi ro" : "Chạm để chỉnh mức rủi ro") +
+            (isTnex ? "Hoa hồng cố định (2.0%)" : (isEditing ? "Đang mở khung chỉnh mức rủi ro" : "Chạm để chỉnh mức rủi ro")) +
             "</span>" +
             "</button>";
 
-          if (isEditing) {
+          if (isEditing && !isTnex) {
             var editorIdRisk = "edit-risk-" + j;
             html +=
               '<form class="lead-editor" data-lead-form="' +
@@ -6579,6 +6598,17 @@
           filterButtons[j].addEventListener("click", function (event) {
             state.filterStatus = event.currentTarget.getAttribute("data-filter") || "all";
             renderLeads();
+          });
+        }
+
+        var projectButtons = document.querySelectorAll("#project-filters .filter-btn-project");
+        for (var pj = 0; pj < projectButtons.length; pj++) {
+          projectButtons[pj].addEventListener("click", function (event) {
+            state.filterProject = event.currentTarget.getAttribute("data-project") || "all";
+            renderLeads();
+            if (typeof renderOrdersSummaryBar === "function") {
+              renderOrdersSummaryBar();
+            }
           });
         }
 
