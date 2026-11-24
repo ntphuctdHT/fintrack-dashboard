@@ -1898,7 +1898,8 @@ const server = http.createServer(async (req, res) => {
         policy: bridgeState.policy,
         ctvLinkConfig: bridgeState.ctvLinkConfig,
         ctvShortLinks: bridgeState.ctvShortLinks,
-        accessKey: bridgeState.accessKey
+        accessKey: bridgeState.accessKey,
+        ctvList: cleanCtvList
       }).catch(() => {});
     }
 
@@ -1946,7 +1947,35 @@ const server = http.createServer(async (req, res) => {
       (c) => c && c.active && c.view && c.view === viewCode
     );
 
-    // Nếu bộ nhớ RAM chưa có (do Vercel cold-start hoặc chưa mở admin), đọc từ Supabase
+    // Đồng bộ policy, cấu hình badge toggle và danh sách CTV từ Supabase (nếu có)
+    const dbSettings = await getSettingsFromSupabase();
+    if (dbSettings) {
+      if (dbSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettings.policy };
+      if (dbSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...dbSettings.ctvLinkConfig };
+      if (dbSettings.accessKey && !bridgeRuntimeKey) {
+        bridgeRuntimeKey = dbSettings.accessKey;
+      }
+      if (Array.isArray(dbSettings.ctvList)) {
+        for (const sc of dbSettings.ctvList) {
+          if (!sc || !sc.view) continue;
+          const exIdx = bridgeState.ctvList.findIndex((c) => c.ref === sc.ref);
+          if (exIdx >= 0) {
+            bridgeState.ctvList[exIdx] = { ...bridgeState.ctvList[exIdx], ...sc };
+          } else {
+            bridgeState.ctvList.push(sc);
+          }
+        }
+      }
+    }
+
+    // Nếu chưa tìm thấy trong RAM, kiểm tra lại sau khi đã nạp dbSettings
+    if (!matchedCtv) {
+      matchedCtv = bridgeState.ctvList.find(
+        (c) => c && c.active !== false && c.view && c.view === viewCode
+      );
+    }
+
+    // Nếu vẫn chưa thấy, đọc tiếp từ bảng ctvs
     if (!matchedCtv) {
       const dbCtv = await getCtvByViewCodeFromSupabase(viewCode);
       if (dbCtv && dbCtv.active) {
@@ -1963,16 +1992,6 @@ const server = http.createServer(async (req, res) => {
     if (!matchedCtv) {
       sendJson(res, 404, { error: "Không tìm thấy hồ sơ CTV tương ứng." });
       return;
-    }
-
-    // Đồng bộ policy và cấu hình badge toggle mới nhất từ Supabase
-    const dbSettings = await getSettingsFromSupabase();
-    if (dbSettings) {
-      if (dbSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettings.policy };
-      if (dbSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...dbSettings.ctvLinkConfig };
-      if (dbSettings.accessKey && !bridgeRuntimeKey) {
-        bridgeRuntimeKey = dbSettings.accessKey;
-      }
     }
 
     try {
