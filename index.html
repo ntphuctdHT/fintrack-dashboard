@@ -2813,92 +2813,37 @@
           <div class="panel-header-row">
             <div>
               <h1 class="section-heading" id="heading-ctv-config">Cấu hình link chiến dịch</h1>
-              <p class="section-sub">Thiết lập link chiến dịch AccessTrade và địa chỉ web xem cho CTV</p>
+              <p class="section-sub">Thiết lập link chiến dịch AccessTrade đa dự án và địa chỉ web xem cho CTV</p>
             </div>
-          <div class="ctv-subtabs-nav" role="tablist" aria-label="Chuyển trang quản lý CTV">
-            <button type="button" class="ctv-subtab-btn" data-ctv-subtab="ctv-config">⚙️ Cấu hình link</button>
-            <button type="button" class="ctv-subtab-btn" data-ctv-subtab="ctv-add">➕ Thêm mới Pub, CTV</button>
-            <button type="button" class="ctv-subtab-btn" data-ctv-subtab="ctv-list">👥 Danh sách CTV</button>
-          </div>
+            <div class="ctv-subtabs-nav" role="tablist" aria-label="Chuyển trang quản lý CTV">
+              <button type="button" class="ctv-subtab-btn" data-ctv-subtab="ctv-config">⚙️ Cấu hình link</button>
+              <button type="button" class="ctv-subtab-btn" data-ctv-subtab="ctv-add">➕ Thêm mới Pub, CTV</button>
+              <button type="button" class="ctv-subtab-btn" data-ctv-subtab="ctv-list">👥 Danh sách CTV</button>
+            </div>
           </div>
 
-<form class="card settings-form" id="ctv-link-config-form" novalidate>
-            <div>
-              <h2 class="card-title">Cấu hình link chiến dịch &amp; CTV</h2>
+          <form id="ctv-link-config-form" novalidate style="display:flex;flex-direction:column;gap:var(--space-4);">
+            <!-- KHỐI 1: CẤU HÌNH HỆ THỐNG CHUNG -->
+            <div class="card settings-form">
+              <h2 class="card-title">🌐 1. Cấu hình hệ thống &amp; Tên miền CTV</h2>
               <p class="field-hint">
-                Thiết lập link chiến dịch AccessTrade và link web xem để hệ thống tự động gán mã CTV (sub2) vào link bán hàng và trang xem hoa hồng.
+                Thiết lập địa chỉ website gốc để tạo link dashboard cho CTV và kiểu rút gọn link bán hàng.
               </p>
-            </div>
-            <div id="ctv-link-config-feedback" hidden></div>
 
-            <div class="field-group">
-              <label class="field-label" for="input-ctv-sample-link">1. Link chiến dịch AccessTrade (Khuyên dùng)</label>
-              <div class="input-row">
-                <input class="text-input" id="input-ctv-sample-link" type="url" inputmode="url" autocomplete="off"
-                  placeholder="https://shorten.asia/... hoặc https://go.isclix.com/deep_link/..." />
-                <button type="button" class="secondary-btn" id="btn-parse-ctv-sample">Tự tách mã</button>
-              </div>
-              <div class="ctv-guide-box">
-                <p class="ctv-guide-line">📌 <strong>Dùng làm gì:</strong> Làm link mẫu để hệ thống tự động gán mã riêng (<code>sub2</code>) của từng CTV vào link chiến dịch, giúp AccessTrade ghi nhận đơn hàng chính xác cho CTV đó.</p>
-                <p class="ctv-guide-line">📍 <strong>Lấy ở đâu:</strong> Vào <code>pub2.accesstrade.vn</code> → <strong>Chiến dịch</strong> (VPBank, Cake, MB...) → Bấm <strong>Tạo link</strong> → Tích chọn <strong>Tạo link rút gọn</strong> rồi bấm Tạo link → Sao chép link (dạng <code>https://shorten.asia/...</code>) dán vào đây và bấm <strong>Tự tách mã</strong>.</p>
-              </div>
-            </div>
-
-            <div class="field-group">
-              <label class="field-label" for="input-ctv-view-base">2. Địa chỉ web xem của CTV (Dashboard)</label>
-              <div class="input-row">
-                <input class="text-input" id="input-ctv-view-base" name="viewBase" type="url" inputmode="url"
-                  autocomplete="off" placeholder="https://ten-web-dashboard-cua-ban" />
-                <button type="button" class="secondary-btn" id="btn-use-current-view-base">Lấy link web này</button>
-              </div>
-              <div class="ctv-guide-box">
-                <p class="ctv-guide-line">📌 <strong>Dùng làm gì:</strong> Địa chỉ website gốc để tạo link dashboard riêng gửi cho CTV xem hoa hồng và đơn hàng của họ (dạng <code>.../xem/[mã-ctv]</code>).</p>
-                <p class="ctv-guide-line">📍 <strong>Lấy ở đâu:</strong> Bấm nút <strong>Lấy link web này</strong> để hệ thống tự điền theo địa chỉ web hiện tại (chỉ cần sửa khi bạn dùng tên miền riêng hoặc Vercel khác).</p>
-              </div>
-            </div>
-
-            <!-- Tuỳ chọn nâng cao (giữ nguyên đầy đủ ID cho JS và kiểm thử) -->
-            <details class="advanced-details" id="ctv-base-link-details">
-              <summary class="advanced-summary">⚙️ Tuỳ chọn nâng cao (Mã Publisher, Chiến dịch, Kiểu rút gọn)</summary>
-              <div class="advanced-body">
-                <div class="lead-editor-grid">
-                  <div class="field-group">
-                    <label class="field-label" for="input-ctv-publisher">Mã publisher (19 chữ số)</label>
-                    <input class="text-input" id="input-ctv-publisher" name="publisher" type="text" inputmode="numeric"
-                      autocomplete="off" placeholder="Ví dụ: 4608706208340350795" />
-                    <p class="field-hint">
-                      Dãy số 19 chữ số nằm sau /deep_link/ trong link AccessTrade (khác với tên tài khoản AT...).
-                    </p>
-                  </div>
-                  <div class="field-group">
-                    <label class="field-label" for="input-ctv-campaign">Mã chiến dịch (dãy số)</label>
-                    <input class="text-input" id="input-ctv-campaign" name="campaign" type="text" inputmode="numeric"
-                      autocomplete="off" placeholder="Ví dụ: 6997817930567730686" />
-                    <p class="field-hint">
-                      Dãy số ID chiến dịch trên AccessTrade (hệ thống tự điền khi bấm Tự tách mã).
-                    </p>
-                  </div>
+              <div class="field-group">
+                <label class="field-label" for="input-ctv-view-base">Địa chỉ web xem của CTV (Dashboard)</label>
+                <div class="input-row">
+                  <input class="text-input" id="input-ctv-view-base" name="viewBase" type="url" inputmode="url"
+                    autocomplete="off" placeholder="https://ten-web-dashboard-cua-ban" />
+                  <button type="button" class="secondary-btn" id="btn-use-current-view-base">⚡ Lấy link web này</button>
                 </div>
-
-                <div class="field-group">
-                  <label class="field-label" for="input-ctv-target-url">Link đích của sản phẩm</label>
-                  <input class="text-input" id="input-ctv-target-url" name="targetUrl" type="url" inputmode="url"
-                    autocomplete="off" placeholder="https://example.com/san-pham" />
+                <div class="ctv-guide-box">
+                  <p class="ctv-guide-line">📌 <strong>Dùng làm gì:</strong> Địa chỉ website gốc để tạo link dashboard riêng cho từng CTV xem hoa hồng và đơn hàng của họ (dạng <code>.../xem/[mã-ctv]</code>).</p>
+                  <p class="ctv-guide-line">📍 <strong>Lấy ở đâu:</strong> Bấm <strong>Lấy link web này</strong> để hệ thống tự điền theo địa chỉ web hiện tại (chỉ cần sửa khi bạn dùng tên miền riêng hoặc Vercel khác).</p>
                 </div>
+              </div>
 
-                <div class="field-group">
-                  <label class="field-label" for="input-ctv-base-link">Link affiliate gốc (nếu dùng)</label>
-                  <input class="text-input" id="input-ctv-base-link" name="baseSalesLink" type="url" inputmode="url"
-                    autocomplete="off" placeholder="Để trống nếu dùng Mã publisher + Mã chiến dịch ở trên" />
-                  <p class="field-hint">
-                    Khi dán link shorten.asia, deep_link/v6 hoặc click.accesstrade.vn, hệ thống giữ nguyên link gốc tại
-                    đây để bảo toàn đầy đủ tham số chiến dịch và chỉ thay sub2 cho từng CTV.
-                  </p>
-                  <button type="button" class="secondary-btn" id="btn-clear-ctv-base-link">
-                    Xoá link gốc (dùng 3 ô ở trên)
-                  </button>
-                </div>
-
+              <div class="lead-editor-grid">
                 <div class="field-group">
                   <label class="field-label" for="select-ctv-sales-link-mode">Kiểu link bán hàng đầu ra (cho CTV)</label>
                   <select class="select-input" id="select-ctv-sales-link-mode" name="salesLinkMode">
@@ -2909,23 +2854,137 @@
                   </select>
                 </div>
 
-                <div class="field-group">
+                <div class="field-group" style="display:flex;align-items:flex-end;">
                   <label class="checkbox-row" for="input-ctv-track-clicks">
                     <input type="checkbox" id="input-ctv-track-clicks" name="trackClicks" checked />
                     <span>Đếm lượt nhấp thật qua máy chủ (/l/&lt;mã&gt; → AccessTrade)</span>
                   </label>
                 </div>
-
-                <button type="button" class="secondary-btn" id="btn-fetch-ctv-link-api">
-                  Tự lấy link từ AccessTrade API (dùng Access Key đã lưu)
-                </button>
               </div>
-            </details>
+            </div>
 
-            <div class="ctv-code-box" id="ctv-link-preview-box" hidden></div>
-            <button type="submit" class="primary-btn" id="btn-save-ctv-link-config">
-              💾 Lưu cấu hình link
-            </button>
+            <!-- KHỐI 2: CẤU HÌNH LINK CÁC DỰ ÁN AFFILIATE (ĐA DỰ ÁN) -->
+            <div class="card settings-form">
+              <div class="panel-header-row" style="margin-bottom:var(--space-2);">
+                <div>
+                  <h2 class="card-title">💼 2. Cấu hình link các dự án Affiliate</h2>
+                  <p class="field-hint">Dán link chiến dịch AccessTrade cho từng dự án để hệ thống tự động gán mã CTV (sub2) riêng.</p>
+                </div>
+                <div class="ctv-subtabs-nav" id="project-config-tabs" role="tablist" aria-label="Chọn dự án cấu hình">
+                  <button type="button" class="ctv-subtab-btn" data-project-tab="vietcredit" aria-selected="true">💳 1. VietCredit</button>
+                  <button type="button" class="ctv-subtab-btn" data-project-tab="tnex" aria-selected="false">🏦 2. TNEX (MSB)</button>
+                </div>
+              </div>
+
+              <!-- DỰ ÁN 1: VIETCREDIT -->
+              <div id="project-panel-vietcredit" class="project-config-subpanel">
+                <div class="field-group">
+                  <label class="field-label" for="input-ctv-sample-link">Link chiến dịch VietCredit (AccessTrade)</label>
+                  <div class="input-row">
+                    <input class="text-input" id="input-ctv-sample-link" type="url" inputmode="url" autocomplete="off"
+                      placeholder="https://shorten.asia/... hoặc https://go.isclix.com/deep_link/..." />
+                    <button type="button" class="secondary-btn" id="btn-parse-ctv-sample">⚡ Tự tách mã</button>
+                  </div>
+                  <div class="ctv-guide-box">
+                    <p class="ctv-guide-line">📌 <strong>Dự án:</strong> Vay tín chấp &amp; Thẻ vay tiêu dùng Tín Việt (VietCredit).</p>
+                    <p class="ctv-guide-line">📍 <strong>Lấy link:</strong> Vào pub2.accesstrade.vn → Chiến dịch VietCredit → Bấm <strong>Tạo link rút gọn</strong> → Sao chép dán vào đây và bấm <strong>Tự tách mã</strong>.</p>
+                  </div>
+                </div>
+
+                <details class="advanced-details" id="ctv-base-link-details">
+                  <summary class="advanced-summary">⚙️ Chi tiết link VietCredit (Publisher, Campaign, Link đích)</summary>
+                  <div class="advanced-body">
+                    <div class="lead-editor-grid">
+                      <div class="field-group">
+                        <label class="field-label" for="input-ctv-publisher">Mã publisher (19 chữ số)</label>
+                        <input class="text-input" id="input-ctv-publisher" name="publisher" type="text" inputmode="numeric"
+                          autocomplete="off" placeholder="Ví dụ: 4608706208340350795" />
+                      </div>
+                      <div class="field-group">
+                        <label class="field-label" for="input-ctv-campaign">Mã chiến dịch (dãy số)</label>
+                        <input class="text-input" id="input-ctv-campaign" name="campaign" type="text" inputmode="numeric"
+                          autocomplete="off" placeholder="Ví dụ: 6997817930567730686" />
+                      </div>
+                    </div>
+                    <div class="field-group">
+                      <label class="field-label" for="input-ctv-target-url">Link đích sản phẩm VietCredit</label>
+                      <input class="text-input" id="input-ctv-target-url" name="targetUrl" type="url" inputmode="url"
+                        autocomplete="off" placeholder="https://tinvay.vietcredit.com.vn" />
+                    </div>
+                    <div class="field-group">
+                      <label class="field-label" for="input-ctv-base-link">Link affiliate gốc VietCredit (nếu dùng)</label>
+                      <input class="text-input" id="input-ctv-base-link" name="baseSalesLink" type="url" inputmode="url"
+                        autocomplete="off" placeholder="https://shorten.asia/..." />
+                      <button type="button" class="secondary-btn" id="btn-clear-ctv-base-link" style="margin-top:var(--space-2);">
+                        Xoá link gốc (dùng 3 ô ở trên)
+                      </button>
+                    </div>
+                    <button type="button" class="secondary-btn" id="btn-fetch-ctv-link-api">
+                      Tự lấy link từ AccessTrade API (dùng Access Key đã lưu)
+                    </button>
+                  </div>
+                </details>
+              </div>
+
+              <!-- DỰ ÁN 2: TNEX -->
+              <div id="project-panel-tnex" class="project-config-subpanel" hidden>
+                <div class="field-group">
+                  <label class="field-label" for="input-project-tnex-link">Link chiến dịch TNEX - Ngân hàng MSB (AccessTrade)</label>
+                  <div class="input-row">
+                    <input class="text-input" id="input-project-tnex-link" type="url" inputmode="url" autocomplete="off"
+                      placeholder="https://shorten.asia/... hoặc https://go.isclix.com/deep_link/..." />
+                    <button type="button" class="secondary-btn" id="btn-parse-project-tnex">⚡ Tự tách mã</button>
+                  </div>
+                  <div class="ctv-guide-box">
+                    <p class="ctv-guide-line">📌 <strong>Dự án:</strong> Vay tiêu dùng online &amp; Tài khoản Ngân hàng số TNEX (MSB).</p>
+                    <p class="ctv-guide-line">📍 <strong>Lấy link:</strong> Vào pub2.accesstrade.vn → Chiến dịch TNEX → Bấm <strong>Tạo link rút gọn</strong> → Sao chép dán vào đây và bấm <strong>Tự tách mã</strong>.</p>
+                  </div>
+                </div>
+
+                <details class="advanced-details" id="tnex-base-link-details">
+                  <summary class="advanced-summary">⚙️ Chi tiết link TNEX (Publisher, Campaign, Link đích)</summary>
+                  <div class="advanced-body">
+                    <div class="lead-editor-grid">
+                      <div class="field-group">
+                        <label class="field-label" for="input-project-tnex-publisher">Mã publisher TNEX</label>
+                        <input class="text-input" id="input-project-tnex-publisher" type="text" inputmode="numeric"
+                          autocomplete="off" placeholder="Ví dụ: 4608706208340350795" />
+                      </div>
+                      <div class="field-group">
+                        <label class="field-label" for="input-project-tnex-campaign">Mã chiến dịch TNEX</label>
+                        <input class="text-input" id="input-project-tnex-campaign" type="text" inputmode="numeric"
+                          autocomplete="off" placeholder="Ví dụ: 54930219483012948" />
+                      </div>
+                    </div>
+                    <div class="field-group">
+                      <label class="field-label" for="input-project-tnex-target-url">Link đích sản phẩm TNEX</label>
+                      <input class="text-input" id="input-project-tnex-target-url" type="url" inputmode="url"
+                        autocomplete="off" placeholder="https://www.tnex.com.vn" />
+                    </div>
+                    <div class="field-group">
+                      <label class="field-label" for="input-project-tnex-base-link">Link affiliate gốc TNEX</label>
+                      <input class="text-input" id="input-project-tnex-base-link" type="url" inputmode="url"
+                        autocomplete="off" placeholder="https://shorten.asia/..." />
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <!-- KHỐI 3: MINH HỌA ĐẦU RA CTV & NÚT LƯU -->
+            <div class="card settings-form">
+              <h2 class="card-title">👁️ 3. Kết quả đầu ra tự động cho từng CTV</h2>
+              <p class="field-hint">
+                Mỗi CTV trong danh sách sẽ tự động có bộ link riêng biệt gắn đúng mã bán hàng và mã xem:
+              </p>
+
+              <div class="ctv-code-box" id="ctv-link-preview-box" hidden></div>
+              <div id="ctv-link-config-feedback" hidden></div>
+
+              <button type="submit" class="primary-btn" id="btn-save-ctv-link-config" style="margin-top:var(--space-3);width:100%;padding:14px;font-size:var(--text-base);">
+                💾 Lưu cấu hình link &amp; Đồng bộ toàn hệ thống
+              </button>
+            </div>
           </form>
         </section>
 
@@ -4381,10 +4440,26 @@
         return "auto";
       }
 
-      function buildCtvSalesLink(cfg, ref, subField) {
+      function getProjectConfigClient(cfg, projectKey) {
+        if (!cfg || typeof cfg !== "object") return null;
+        var projects = cfg.projects && typeof cfg.projects === "object" ? cfg.projects : {};
+        var pKey = String(projectKey || "").trim().toLowerCase();
+        if (pKey && projects[pKey] && typeof projects[pKey] === "object") {
+          return projects[pKey];
+        }
+        var defKey = String(cfg.defaultProject || "vietcredit").trim().toLowerCase();
+        if (projects[defKey] && typeof projects[defKey] === "object") {
+          return projects[defKey];
+        }
+        return null;
+      }
+
+      function buildCtvSalesLink(cfg, ref, subField, projectKey) {
+        var pCfg = getProjectConfigClient(cfg, projectKey);
+        var effectiveCfg = pCfg || cfg || {};
         var refCode = String(ref || "").trim();
         var field = normalizeCtvField(subField || "sub2");
-        var baseSalesLink = cfg && typeof cfg.baseSalesLink === "string" ? cfg.baseSalesLink.trim() : "";
+        var baseSalesLink = effectiveCfg && typeof effectiveCfg.baseSalesLink === "string" ? effectiveCfg.baseSalesLink.trim() : (cfg && typeof cfg.baseSalesLink === "string" ? cfg.baseSalesLink.trim() : "");
         if (baseSalesLink && isValidHttpUrl(baseSalesLink)) {
           var parsed = new URL(baseSalesLink);
           if (field !== "sub2") {
@@ -4394,9 +4469,9 @@
           return parsed.toString();
         }
 
-        var pub = encodeURIComponent(String((cfg && cfg.publisher) || "").trim());
-        var camp = encodeURIComponent(String((cfg && cfg.campaign) || "").trim());
-        var target = encodeURIComponent(String((cfg && cfg.targetUrl) || "").trim());
+        var pub = encodeURIComponent(String((effectiveCfg && effectiveCfg.publisher) || (cfg && cfg.publisher) || "").trim());
+        var camp = encodeURIComponent(String((effectiveCfg && effectiveCfg.campaign) || (cfg && cfg.campaign) || "").trim());
+        var target = encodeURIComponent(String((effectiveCfg && effectiveCfg.targetUrl) || (cfg && cfg.targetUrl) || "").trim());
         return (
           "https://go.isclix.com/deep_link/" +
           pub +
@@ -4411,7 +4486,7 @@
         );
       }
 
-      function buildCtvTrackedBridgeLink(cfg, ref) {
+      function buildCtvTrackedBridgeLink(cfg, ref, projectKey) {
         var refCode = String(ref || "").trim();
         if (!refCode) return "";
         var cleanBase = getEffectiveViewBaseUrl(cfg);
@@ -4421,24 +4496,26 @@
           .replace(/\/+$/, "");
         var base = cleanBase || rawFallback;
         if (!base) return "";
-        return base + "/l/" + encodeURIComponent(refCode);
+        var pKey = String(projectKey || "").trim().toLowerCase();
+        var suffix = pKey && pKey !== "vietcredit" ? "/" + encodeURIComponent(pKey) : "";
+        return base + "/l/" + encodeURIComponent(refCode) + suffix;
       }
 
-      function getOutboundTrackingBaseLink(cfg, ref, subField) {
+      function getOutboundTrackingBaseLink(cfg, ref, subField, projectKey) {
         if (cfg && cfg.trackClicks === true && normalizeSalesLinkMode(cfg.salesLinkMode) !== "short_accesstrade") {
-          var tracked = buildCtvTrackedBridgeLink(cfg, ref);
+          var tracked = buildCtvTrackedBridgeLink(cfg, ref, projectKey);
           if (tracked) return tracked;
         }
-        return buildCtvSalesLink(cfg, ref, subField);
+        return buildCtvSalesLink(cfg, ref, subField, projectKey);
       }
 
       function buildShortLinkCacheKey(mode, fullSalesLink) {
         return normalizeSalesLinkMode(mode) + "|" + String(fullSalesLink || "").trim();
       }
 
-      function getCachedCtvShortEntry(cfg, ref, shortLinksMap, subField) {
+      function getCachedCtvShortEntry(cfg, ref, shortLinksMap, subField, projectKey) {
         if (!cfg || !isShortSalesLinkMode(cfg.salesLinkMode)) return null;
-        var fullSalesLink = getOutboundTrackingBaseLink(cfg, ref, subField);
+        var fullSalesLink = getOutboundTrackingBaseLink(cfg, ref, subField, projectKey);
         var key = buildShortLinkCacheKey(cfg.salesLinkMode, fullSalesLink);
         var map = shortLinksMap && typeof shortLinksMap === "object" ? shortLinksMap : {};
         var entry = map[key];
@@ -4454,10 +4531,10 @@
         return null;
       }
 
-      function getEffectiveCtvSalesLink(cfg, ref, shortLinksMap, subField) {
-        var cached = getCachedCtvShortEntry(cfg, ref, shortLinksMap, subField);
+      function getEffectiveCtvSalesLink(cfg, ref, shortLinksMap, subField, projectKey) {
+        var cached = getCachedCtvShortEntry(cfg, ref, shortLinksMap, subField, projectKey);
         if (cached) return cached.shortUrl;
-        return getOutboundTrackingBaseLink(cfg, ref, subField);
+        return getOutboundTrackingBaseLink(cfg, ref, subField, projectKey);
       }
 
       function buildCtvViewLink(cfg, viewCode) {
@@ -4471,19 +4548,23 @@
       }
 
       function buildCtvInviteMessage(ctv, cfg, shortLinksMap, subField) {
-        var salesLink = getEffectiveCtvSalesLink(cfg, ctv.ref, shortLinksMap, subField);
+        var vcLink = getEffectiveCtvSalesLink(cfg, ctv.ref, shortLinksMap, subField, "vietcredit");
+        var tnexLink = getEffectiveCtvSalesLink(cfg, ctv.ref, shortLinksMap, subField, "tnex");
         var viewLink = buildCtvViewLink(cfg, ctv.view);
         return (
           "Chào " +
           ctv.name +
-          " · Trạng thái đơn Pub của bạn. Dưới đây là 2 link của riêng bạn:\n" +
-          "- Link bán hàng (gửi cho khách): " +
-          salesLink +
-          "\n" +
-          "- Link xem trạng thái đơn Pub của bạn (chỉ mình bạn xem): " +
+          " · Trạng thái đơn Pub của bạn. Dưới đây là các đường link của riêng bạn:\n\n" +
+          "💼 1. Link bán hàng VietCredit (Vay tiêu dùng):\n" +
+          vcLink +
+          "\n\n" +
+          "💼 2. Link bán hàng TNEX (Ngân hàng số MSB):\n" +
+          tnexLink +
+          "\n\n" +
+          "📊 3. Link xem trạng thái đơn Pub của bạn (chỉ mình bạn xem):\n" +
           viewLink +
-          "\n" +
-          "Lưu ý: dùng đúng link của mình, không cắt hay sửa link, không chia sẻ link xem cho người khác."
+          "\n\n" +
+          "Lưu ý: Dùng đúng link của mình để được ghi nhận đơn, không chia sẻ link xem báo cáo cho người khác."
         );
       }
 
@@ -6520,14 +6601,57 @@
         var salesModeEl = document.getElementById("select-ctv-sales-link-mode");
         var trackClicksEl = document.getElementById("input-ctv-track-clicks");
 
+        var tnexPubEl = document.getElementById("input-project-tnex-publisher");
+        var tnexCampEl = document.getElementById("input-project-tnex-campaign");
+        var tnexTargetEl = document.getElementById("input-project-tnex-target-url");
+        var tnexBaseLinkEl = document.getElementById("input-project-tnex-base-link");
+
+        var vcPub = pubEl ? pubEl.value.trim() : "";
+        var vcCamp = campEl ? campEl.value.trim() : "";
+        var vcTarget = targetEl ? targetEl.value.trim() : "";
+        var vcBase = baseLinkEl ? baseLinkEl.value.trim() : "";
+
+        var tnexPub = tnexPubEl ? tnexPubEl.value.trim() : "";
+        var tnexCamp = tnexCampEl ? tnexCampEl.value.trim() : "";
+        var tnexTarget = tnexTargetEl ? tnexTargetEl.value.trim() : "";
+        var tnexBase = tnexBaseLinkEl ? tnexBaseLinkEl.value.trim() : "";
+
+        var existingProjects = (state.ctvLinkConfig && state.ctvLinkConfig.projects) || {};
+        var projects = Object.assign({}, existingProjects, {
+          vietcredit: {
+            id: "vietcredit",
+            name: "VietCredit - Công ty Tài chính Cổ phần Tín Việt",
+            tag: "Vay tiêu dùng",
+            desc: "Chiến dịch Vay tín chấp & Thẻ vay tiêu dùng Tín Việt.",
+            publisher: vcPub,
+            campaign: vcCamp,
+            targetUrl: vcTarget,
+            baseSalesLink: vcBase,
+            enabled: true
+          },
+          tnex: {
+            id: "tnex",
+            name: "TNEX - Ngân hàng số Hàng Hải (MSB)",
+            tag: "Ngân hàng số",
+            desc: "Chiến dịch Vay tiêu dùng online (TNEX - MSB).",
+            publisher: tnexPub,
+            campaign: tnexCamp,
+            targetUrl: tnexTarget,
+            baseSalesLink: tnexBase,
+            enabled: true
+          }
+        });
+
         return {
-          publisher: pubEl ? pubEl.value.trim() : "",
-          campaign: campEl ? campEl.value.trim() : "",
-          targetUrl: targetEl ? targetEl.value.trim() : "",
+          publisher: vcPub,
+          campaign: vcCamp,
+          targetUrl: vcTarget,
           viewBase: viewBaseEl ? viewBaseEl.value.trim().replace(/\/+$/, "") : "",
-          baseSalesLink: baseLinkEl ? baseLinkEl.value.trim() : "",
+          baseSalesLink: vcBase,
           salesLinkMode: normalizeSalesLinkMode(salesModeEl ? salesModeEl.value : "short_auto"),
-          trackClicks: trackClicksEl ? Boolean(trackClicksEl.checked) : true
+          trackClicks: trackClicksEl ? Boolean(trackClicksEl.checked) : true,
+          defaultProject: "vietcredit",
+          projects: projects
         };
       }
 
@@ -6566,95 +6690,42 @@
         showCtvLinkConfigFeedback("", "");
         if (previewBox) {
           var subFieldName = normalizeCtvField(state.ctvField);
-          var sampleRef =
+          var sampleCtv =
             state.ctvList && state.ctvList.length > 0 && state.ctvList[0].ref
-              ? state.ctvList[0].ref
-              : "abcd2345";
-          var sampleOutboundLink = getOutboundTrackingBaseLink(cfg, sampleRef, subFieldName);
-          var sampleAtLink = buildCtvSalesLink(cfg, sampleRef, subFieldName);
-          var isTrackActive =
-            cfg.trackClicks === true && normalizeSalesLinkMode(cfg.salesLinkMode) !== "short_accesstrade";
-          var isShortMode = isShortSalesLinkMode(cfg.salesLinkMode);
-          var cachedSample = isShortMode
-            ? getCachedCtvShortEntry(cfg, sampleRef, state.ctvShortLinks, subFieldName)
-            : null;
-          var verifiedSample =
-            state.sampleShortCheck && state.sampleShortCheck.fullSalesLink === sampleOutboundLink
-              ? state.sampleShortCheck
-              : null;
+              ? state.ctvList[0]
+              : { name: "Mẫu AA001", ref: "w79kfna7", view: "cgafgvy2b4r62re7ykdw9wvn" };
+          var sampleRef = sampleCtv.ref;
+          var sampleView = sampleCtv.view || "cgafgvy2b4r62re7ykdw9wvn";
+
+          var vcLink = getEffectiveCtvSalesLink(cfg, sampleRef, state.ctvShortLinks, subFieldName, "vietcredit");
+          var tnexLink = getEffectiveCtvSalesLink(cfg, sampleRef, state.ctvShortLinks, subFieldName, "tnex");
+          var viewLink = buildCtvViewLink(cfg, sampleView);
+          var viewLinkShort = getEffectiveViewBaseUrl(cfg) ? getEffectiveViewBaseUrl(cfg).replace(/\/+$/, "") + "/x/" + encodeURIComponent(sampleView) : "";
 
           previewBox.hidden = false;
           var html = "";
-          if (cfg.trackClicks === true && normalizeSalesLinkMode(cfg.salesLinkMode) === "short_accesstrade") {
-            html +=
-              '<p class="field-hint">Lưu ý: Chế độ shorten.asia đi thẳng qua AccessTrade nên sẽ không đếm lượt nhấp trên máy chủ này. Chọn "Tự động" hoặc "is.gd" để vừa rút gọn vừa đếm lượt nhấp thật.</p>';
+          html += '<p class="policy-subhead" style="margin-bottom:var(--space-2);"><strong>Mẫu link đầu ra tự động cho CTV (' + escapeHtml(sampleCtv.name) + ' - mã ' + escapeHtml(sampleRef) + '):</strong></p>';
+
+          html += '<div style="margin-bottom:var(--space-3);">';
+          html += '<div class="ctv-code-row"><span>💼 1. Link bán hàng VietCredit:</span></div>';
+          html += '<p class="ctv-preview-url">' + escapeHtml(vcLink) + '</p>';
+          html += '</div>';
+
+          html += '<div style="margin-bottom:var(--space-3);">';
+          html += '<div class="ctv-code-row"><span>💼 2. Link bán hàng TNEX (MSB):</span></div>';
+          html += '<p class="ctv-preview-url">' + escapeHtml(tnexLink) + '</p>';
+          html += '</div>';
+
+          html += '<div style="margin-bottom:var(--space-3);">';
+          html += '<div class="ctv-code-row"><span>📊 3. Link xem Dashboard của CTV:</span></div>';
+          html += '<p class="ctv-preview-url">' + escapeHtml(viewLink) + '</p>';
+          if (viewLinkShort) {
+            html += '<p class="ctv-preview-url lead-fin-muted" style="margin-top:2px;">(Rút gọn: ' + escapeHtml(viewLinkShort) + ')</p>';
           }
-          if (isShortMode) {
-            html +=
-              '<p class="policy-subhead">Đầu ra khi sao chép cho CTV (' +
-              escapeHtml(sampleRef) +
-              ") · Chế độ link rút gọn" +
-              (isTrackActive ? " + đếm nhấp thật" : "") +
-              ":</p>";
-            if (cachedSample) {
-              html +=
-                '<p class="ctv-preview-url"><strong>' +
-                escapeHtml(cachedSample.shortUrl) +
-                "</strong></p>" +
-                '<p class="field-hint">Nguồn: ' +
-                escapeHtml(cachedSample.providerLabel) +
-                (isTrackActive ? " → qua " + escapeHtml(sampleOutboundLink) + " → AccessTrade (" : " · Giữ nguyên ") +
-                escapeHtml(subFieldName) +
-                "=" +
-                escapeHtml(sampleRef) +
-                (isTrackActive ? ")" : "") +
-                "</p>" +
-                '<a class="ctv-inline-link" href="' +
-                escapeHtml(cachedSample.shortUrl) +
-                '" target="_blank" rel="noopener noreferrer">Mở thử link rút gọn trong tab mới</a>';
-            } else {
-              html +=
-                '<p class="field-hint">' +
-                (isTrackActive
-                  ? "Link theo dõi lượt nhấp (đếm click tại máy chủ rồi chuyển hướng sang AccessTrade):"
-                  : 'Sẽ tự động rút gọn từ link tracking bên dưới khi bấm "Sao chép link bán hàng":') +
-                "</p>" +
-                '<p class="ctv-preview-url">' +
-                escapeHtml(sampleOutboundLink) +
-                "</p>" +
-                (isTrackActive
-                  ? '<p class="field-hint">Đích AccessTrade: ' + escapeHtml(sampleAtLink) + "</p>"
-                  : "");
-            }
-            if (verifiedSample && verifiedSample.ok) {
-              html +=
-                '<p class="field-hint"><strong>✔ Đã kiểm tra chuyển hướng thật:</strong> ' +
-                escapeHtml(verifiedSample.shortUrl) +
-                " → " +
-                escapeHtml(verifiedSample.resolvedHost) +
-                " (có " +
-                escapeHtml(subFieldName) +
-                "=" +
-                escapeHtml(sampleRef) +
-                ").</p>";
-            }
-            html +=
-              '<button type="button" class="secondary-btn" id="btn-test-ctv-short-link">Rút gọn thử &amp; kiểm tra tracking</button>';
-          } else {
-            html +=
-              '<p class="policy-subhead">Link bán hàng mẫu sẽ tạo cho CTV (' +
-              escapeHtml(sampleRef) +
-              "):</p>" +
-              '<p class="ctv-preview-url">' +
-              escapeHtml(sampleOutboundLink) +
-              "</p>" +
-              (isTrackActive
-                ? '<p class="field-hint">Tự động đếm nhấp và chuyển hướng 302 → ' + escapeHtml(sampleAtLink) + "</p>"
-                : "") +
-              '<a class="ctv-inline-link" href="' +
-              escapeHtml(sampleOutboundLink) +
-              '" target="_blank" rel="noopener noreferrer">Mở thử link mẫu trong tab mới</a>';
-          }
+          html += '</div>';
+
+          html += '<p class="field-hint">Mỗi CTV khi thêm vào danh sách sẽ tự sinh đúng bộ link riêng này, ghi nhận chính xác 100% vào AccessTrade và Dashboard của họ.</p>';
+
           previewBox.innerHTML = html;
         }
       }
@@ -6669,20 +6740,44 @@
         var salesModeEl = document.getElementById("select-ctv-sales-link-mode");
         var trackClicksEl = document.getElementById("input-ctv-track-clicks");
 
+        var tnexPubEl = document.getElementById("input-project-tnex-publisher");
+        var tnexCampEl = document.getElementById("input-project-tnex-campaign");
+        var tnexTargetEl = document.getElementById("input-project-tnex-target-url");
+        var tnexBaseLinkEl = document.getElementById("input-project-tnex-base-link");
+        var tnexDetailsEl = document.getElementById("tnex-base-link-details");
+
+        var projects = (state.ctvLinkConfig && state.ctvLinkConfig.projects) || {};
+        var vcProj = projects.vietcredit || {};
+        var tnexProj = projects.tnex || {};
+
         if (pubEl && document.activeElement !== pubEl) {
-          pubEl.value = state.ctvLinkConfig.publisher || "";
+          pubEl.value = vcProj.publisher || state.ctvLinkConfig.publisher || "";
         }
         if (campEl && document.activeElement !== campEl) {
-          campEl.value = state.ctvLinkConfig.campaign || "";
+          campEl.value = vcProj.campaign || state.ctvLinkConfig.campaign || "";
         }
         if (targetEl && document.activeElement !== targetEl) {
-          targetEl.value = state.ctvLinkConfig.targetUrl || "";
-        }
-        if (viewBaseEl && document.activeElement !== viewBaseEl) {
-          viewBaseEl.value = state.ctvLinkConfig.viewBase || "";
+          targetEl.value = vcProj.targetUrl || state.ctvLinkConfig.targetUrl || "";
         }
         if (baseLinkEl && document.activeElement !== baseLinkEl) {
-          baseLinkEl.value = state.ctvLinkConfig.baseSalesLink || "";
+          baseLinkEl.value = vcProj.baseSalesLink || state.ctvLinkConfig.baseSalesLink || "";
+        }
+
+        if (tnexPubEl && document.activeElement !== tnexPubEl) {
+          tnexPubEl.value = tnexProj.publisher || "";
+        }
+        if (tnexCampEl && document.activeElement !== tnexCampEl) {
+          tnexCampEl.value = tnexProj.campaign || "";
+        }
+        if (tnexTargetEl && document.activeElement !== tnexTargetEl) {
+          tnexTargetEl.value = tnexProj.targetUrl || "";
+        }
+        if (tnexBaseLinkEl && document.activeElement !== tnexBaseLinkEl) {
+          tnexBaseLinkEl.value = tnexProj.baseSalesLink || "";
+        }
+
+        if (viewBaseEl && document.activeElement !== viewBaseEl) {
+          viewBaseEl.value = state.ctvLinkConfig.viewBase || "";
         }
         if (salesModeEl && document.activeElement !== salesModeEl) {
           salesModeEl.value = normalizeSalesLinkMode(state.ctvLinkConfig.salesLinkMode);
@@ -6690,8 +6785,11 @@
         if (trackClicksEl && document.activeElement !== trackClicksEl) {
           trackClicksEl.checked = state.ctvLinkConfig.trackClicks !== false;
         }
-        if (baseDetailsEl && state.ctvLinkConfig.baseSalesLink) {
+        if (baseDetailsEl && (vcProj.baseSalesLink || state.ctvLinkConfig.baseSalesLink)) {
           baseDetailsEl.open = true;
+        }
+        if (tnexDetailsEl && (tnexProj.publisher || tnexProj.campaign || tnexProj.baseSalesLink)) {
+          tnexDetailsEl.open = true;
         }
         renderCtvLinkPreviewAndStatus(state.ctvLinkConfig);
       }
@@ -6901,36 +6999,24 @@
               "</div>" +
               "</div>" +
               '<div class="ctv-action-section">' +
-              '<p class="ctv-action-heading">2. Link bán hàng (gửi khách đăng ký) &amp; Tin nhắn Zalo</p>' +
+              '<p class="ctv-action-heading">2. Link bán hàng các dự án &amp; Tin nhắn gửi CTV</p>' +
               '<div class="ctv-actions-grid">' +
+              '<button type="button" class="secondary-btn" data-ctv-action="copy-project-sales" data-project-key="vietcredit" data-ctv-id="' +
+              escapeHtml(ctv.id) +
+              '">📋 Copy link VietCredit</button>' +
+              '<button type="button" class="secondary-btn" data-ctv-action="copy-project-sales" data-project-key="tnex" data-ctv-id="' +
+              escapeHtml(ctv.id) +
+              '">📋 Copy link TNEX (MSB)</button>' +
               '<button type="button" class="secondary-btn" data-ctv-action="copy-sales" data-ctv-id="' +
               escapeHtml(ctv.id) +
               '"' +
               (isShorteningThis ? " disabled" : "") +
               ">" +
-              (isShorteningThis ? "Đang rút gọn..." : "Sao chép link bán hàng") +
+              (isShorteningThis ? "Đang rút gọn..." : "Sao chép link mặc định") +
               "</button>" +
-              (cfgValid
-                ? '<a class="secondary-btn" data-ctv-test-sales="' +
-                escapeHtml(ctv.id) +
-                '" href="' +
-                escapeHtml(effectiveSalesLink) +
-                '" target="_blank" rel="noopener noreferrer">' +
-                (cachedShort ? "Mở thử link bán hàng rút gọn" : "Mở thử link bán hàng") +
-                "</a>"
-                : "") +
-              (cfgValid && isShortMode && cachedShort
-                ? '<button type="button" class="secondary-btn" data-ctv-action="refresh-short" data-ctv-id="' +
-                escapeHtml(ctv.id) +
-                '"' +
-                (isShorteningThis ? " disabled" : "") +
-                ">Tạo lại link rút gọn</button>"
-                : "") +
-              '<button type="button" class="secondary-btn" data-ctv-action="copy-message" data-ctv-id="' +
+              '<button type="button" class="primary-btn" data-ctv-action="copy-message" data-ctv-id="' +
               escapeHtml(ctv.id) +
-              '"' +
-              (isShorteningThis ? " disabled" : "") +
-              ">Sao chép tin nhắn Zalo (2 link)</button>" +
+              '" style="grid-column: 1 / -1;">✉️ Sao chép tin nhắn đầy đủ (Gồm cả 2 dự án &amp; Dashboard)</button>' +
               "</div>" +
               "</div>" +
               '<div class="ctv-action-section">' +
@@ -7386,18 +7472,19 @@
           });
         }
 
-        function applyParsedAccessTradeResult(parsed) {
-          var pubEl = document.getElementById("input-ctv-publisher");
-          var campEl = document.getElementById("input-ctv-campaign");
-          var targetEl = document.getElementById("input-ctv-target-url");
-          var baseLinkEl = document.getElementById("input-ctv-base-link");
-          var baseDetailsEl = document.getElementById("ctv-base-link-details");
+        function applyParsedAccessTradeResult(parsed, projectKey) {
+          var isTnex = projectKey === "tnex";
+          var pubEl = document.getElementById(isTnex ? "input-project-tnex-publisher" : "input-ctv-publisher");
+          var campEl = document.getElementById(isTnex ? "input-project-tnex-campaign" : "input-ctv-campaign");
+          var targetEl = document.getElementById(isTnex ? "input-project-tnex-target-url" : "input-ctv-target-url");
+          var baseLinkEl = document.getElementById(isTnex ? "input-project-tnex-base-link" : "input-ctv-base-link");
+          var baseDetailsEl = document.getElementById(isTnex ? "tnex-base-link-details" : "ctv-base-link-details");
 
           if (pubEl) pubEl.value = parsed.publisher || "";
           if (campEl) campEl.value = parsed.campaign || "";
           if (targetEl && parsed.targetUrl) targetEl.value = parsed.targetUrl;
           if (baseLinkEl) baseLinkEl.value = parsed.baseSalesLink || "";
-          if (baseDetailsEl && parsed.baseSalesLink) {
+          if (baseDetailsEl && (parsed.baseSalesLink || parsed.publisher || parsed.campaign)) {
             baseDetailsEl.open = true;
           }
           renderCtvLinkPreviewAndStatus(readCtvLinkConfigFromInputs());
@@ -7471,7 +7558,7 @@
             return;
           }
 
-          applyParsedAccessTradeResult(parsed);
+          applyParsedAccessTradeResult(parsed, "vietcredit");
           showCtvLinkConfigFeedback(
             "success",
             parsed.publisher && parsed.campaign
@@ -7484,7 +7571,7 @@
               " Hãy bấm Lưu cấu hình."
               : "Đã tách link affiliate gốc thành công. Kiểm tra Địa chỉ trang xem rồi bấm Lưu cấu hình."
           );
-          showToast("success", "Đã tự điền mã từ link AccessTrade.");
+          showToast("success", "Đã tự điền mã từ link VietCredit.");
         }
         if (parseSampleBtn) {
           parseSampleBtn.addEventListener("click", handleParseSampleLink);
@@ -7498,6 +7585,82 @@
             }, 0);
           });
         }
+
+        // Tự tách mã chiến dịch TNEX
+        var parseTnexBtn = document.getElementById("btn-parse-project-tnex");
+        var tnexLinkInput = document.getElementById("input-project-tnex-link");
+        async function handleParseTnexLink() {
+          var rawVal = tnexLinkInput ? tnexLinkInput.value.trim() : "";
+          if (!rawVal) {
+            showToast("warning", "Vui lòng dán link chiến dịch TNEX vào ô.");
+            return;
+          }
+          var parsed = parseAccessTradeLink(rawVal);
+          if (!parsed.ok && parsed.isShortener && parsed.canAutoResolve) {
+            var resolveEndpoint;
+            try {
+              resolveEndpoint = buildResolveShortLinkEndpoint(state.serverUrl);
+            } catch (epErr) {
+              showToast("warning", epErr && epErr.message ? epErr.message : parsed.error);
+              return;
+            }
+            if (parseTnexBtn) parseTnexBtn.disabled = true;
+            try {
+              var resolveResp = await window.fetch(resolveEndpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Accept: "application/json" },
+                body: JSON.stringify({ url: rawVal })
+              });
+              var resolvePayload = await resolveResp.json().catch(function () { return null; });
+              if (resolveResp.ok && resolvePayload && resolvePayload.resolved_url) {
+                parsed = parseAccessTradeLink(resolvePayload.resolved_url);
+              }
+            } catch (_ignoreErr) {
+            } finally {
+              if (parseTnexBtn) parseTnexBtn.disabled = false;
+            }
+          }
+          if (parsed && (parsed.publisher || parsed.campaign || parsed.baseSalesLink)) {
+            applyParsedAccessTradeResult(parsed, "tnex");
+            showToast("success", "Đã tách mã chiến dịch TNEX thành công.");
+          } else {
+            showToast("error", "Không thể tách mã từ link TNEX này.");
+          }
+        }
+        if (parseTnexBtn) {
+          parseTnexBtn.addEventListener("click", handleParseTnexLink);
+        }
+        if (tnexLinkInput) {
+          tnexLinkInput.addEventListener("paste", function () {
+            window.setTimeout(function () {
+              if (tnexLinkInput.value && tnexLinkInput.value.trim()) {
+                handleParseTnexLink();
+              }
+            }, 0);
+          });
+        }
+
+        // Chuyển tab giữa các dự án (VietCredit / TNEX)
+        var projectTabBtns = document.querySelectorAll("#project-config-tabs button[data-project-tab]");
+        projectTabBtns.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var targetTab = btn.getAttribute("data-project-tab");
+            projectTabBtns.forEach(function (b) {
+              b.classList.remove("active");
+              b.setAttribute("aria-selected", "false");
+            });
+            btn.classList.add("active");
+            btn.setAttribute("aria-selected", "true");
+            var panels = document.querySelectorAll(".project-config-subpanel");
+            panels.forEach(function (p) {
+              p.hidden = true;
+            });
+            var targetPanel = document.getElementById("project-panel-" + targetTab);
+            if (targetPanel) {
+              targetPanel.hidden = false;
+            }
+          });
+        });
 
         var clearBaseLinkBtn = document.getElementById("btn-clear-ctv-base-link");
         if (clearBaseLinkBtn) {
@@ -7990,6 +8153,26 @@
                 showToast(
                   "success",
                   "Đã tạo lại link rút gọn cho " + targetCtv.name + ": " + existingShort.shortUrl
+                );
+                return;
+              }
+
+              if (action === "copy-project-sales") {
+                var pKey = btn.getAttribute("data-project-key") || "vietcredit";
+                var pLink = getEffectiveCtvSalesLink(
+                  state.ctvLinkConfig,
+                  targetCtv.ref,
+                  state.ctvShortLinks,
+                  subFieldName,
+                  pKey
+                );
+                var pName = pKey === "tnex" ? "TNEX (MSB)" : "VietCredit";
+                var copiedP = await copyTextToClipboard(pLink);
+                showToast(
+                  copiedP ? "success" : "error",
+                  copiedP
+                    ? "Đã sao chép link bán hàng " + pName + " của " + targetCtv.name + "."
+                    : "Không thể sao chép tự động, vui lòng thử lại."
                 );
                 return;
               }

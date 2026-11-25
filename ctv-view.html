@@ -18,7 +18,7 @@
   <meta name="twitter:title" content="Trạng thái đơn Pub của bạn" />
   <meta name="twitter:description"
     content="Trạng thái đơn Pub của bạn - Cập nhật tự động số liệu hoa hồng và đơn hàng" />
-  <!-- Trạng thái đơn Pub của bạn -->
+  <!-- Hồ sơ cộng tác viên - Trạng thái đơn Pub của bạn -->
   <style>
     :root {
       color-scheme: light;
@@ -1580,6 +1580,17 @@
         var rawShortLink = typeof raw.short_link === "string" ? raw.short_link.trim() : "";
         var shortLink = isHttpsUrl(rawShortLink) || isLocalHttpUrl(rawShortLink) ? rawShortLink : "";
 
+        var rawProjectLinks = raw.project_links && typeof raw.project_links === "object" ? raw.project_links : {};
+        var projectLinks = {};
+        for (var pk in rawProjectLinks) {
+          if (Object.prototype.hasOwnProperty.call(rawProjectLinks, pk)) {
+            var plVal = String(rawProjectLinks[pk] || "").trim();
+            if (isHttpsUrl(plVal) || isLocalHttpUrl(plVal)) {
+              projectLinks[pk.toLowerCase()] = plVal;
+            }
+          }
+        }
+
         var rawProj = raw.project && typeof raw.project === "object" ? raw.project : {};
         var projectName =
           typeof rawProj.name === "string" && rawProj.name.trim()
@@ -1607,6 +1618,7 @@
           totals: totals,
           orders: orders,
           shortLink: shortLink,
+          projectLinks: projectLinks,
           badges: raw.badges || raw.badgeConfig || null,
           project: {
             name: projectName,
@@ -2186,13 +2198,15 @@
         for (var csi = 0; csi < copyShortBtns.length; csi++) {
           copyShortBtns[csi].addEventListener("click", async function (ev) {
             var btn = ev.currentTarget;
-            var pkey = btn.getAttribute("data-project-key") || "vietcredit";
+            var pkey = (btn.getAttribute("data-project-key") || "vietcredit").toLowerCase();
             var tip = document.getElementById("copy-tip-" + pkey);
             var proto = window.location && window.location.protocol;
             var isHttp = proto === "http:" || proto === "https:";
             var origin = isHttp ? window.location.origin : "";
             var refCode = (state.data && state.data.ref) || "";
-            var urlToCopy = (state.data && state.data.shortLink) || (origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) : "");
+            var pLink = (state.data && state.data.projectLinks && state.data.projectLinks[pkey]) || "";
+            var fallbackProjectTracked = origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) + (pkey !== "vietcredit" ? "/" + encodeURIComponent(pkey) : "") : "";
+            var urlToCopy = pLink || fallbackProjectTracked || (state.data && state.data.shortLink) || (origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) : "");
 
             if (!urlToCopy) {
               if (tip) {
