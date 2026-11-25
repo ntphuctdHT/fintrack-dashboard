@@ -1627,11 +1627,12 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
 
   return {
     name: String(ctv.name || "bạn"),
+    ref: String(ctv.ref || ""),
     updated_at: new Date().toISOString(),
     last_click_at: clickInfo.lastClickAt,
     totals,
     orders,
-    short_link: findSalesLinkForCtv(ctv, reqOrigin),
+    short_link: findSalesLinkForCtv(ctv, reqOrigin) || (resolveRequestOrigin(req) + "/l/" + encodeURIComponent(ctv.ref)),
     project: {
       name: projectName,
       note: DEFAULT_PROJECT_NOTE

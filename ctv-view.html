@@ -1149,6 +1149,39 @@
       font-size: var(--text-xs);
       color: var(--c-sub);
     }
+
+    .pub-project-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .btn-copy-short-sales {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--c-bg);
+      background-color: var(--c-ink);
+      border: 1px solid var(--c-ink);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    .btn-copy-short-sales:hover {
+      opacity: 0.88;
+    }
+
+    .pub-project-copy-tip {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--c-ink);
+    }
   </style>
 </head>
 
@@ -1211,6 +1244,13 @@
             <strong class="pub-project-name">VietCredit - Công ty Tài chính Cổ phần Tín Việt</strong>
           </div>
           <p class="pub-project-desc">Chiến dịch Vay tín chấp &amp; Thẻ vay tiêu dùng Tín Việt.</p>
+          <div class="pub-project-footer">
+            <span class="pub-project-copy-tip" id="copy-tip-vietcredit" hidden>Đã copy link!</span>
+            <button type="button" class="btn-copy-short-sales" data-project-key="vietcredit" title="Copy link bán hàng rút gọn của bạn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy</span>
+            </button>
+          </div>
         </div>
 
         <!-- Dự án 2: TNEX -->
@@ -1220,6 +1260,13 @@
             <strong class="pub-project-name">TNEX - Ngân hàng số Hàng Hải (MSB)</strong>
           </div>
           <p class="pub-project-desc">Chiến dịch Vay tiêu dùng online (TNEX - MSB).</p>
+          <div class="pub-project-footer">
+            <span class="pub-project-copy-tip" id="copy-tip-tnex" hidden>Đã copy link!</span>
+            <button type="button" class="btn-copy-short-sales" data-project-key="tnex" title="Copy link bán hàng rút gọn của bạn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy</span>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -1555,6 +1602,7 @@
 
         return {
           name: name,
+          ref: typeof raw.ref === "string" ? raw.ref.trim() : "",
           updatedAtText: formatVietnamClockTime(updatedDate),
           totals: totals,
           orders: orders,
@@ -2126,6 +2174,59 @@
         var copyBtn = document.getElementById("btn-copy-link");
         if (copyBtn) {
           copyBtn.addEventListener("click", handleCopySalesLink);
+        }
+
+        var copyShortBtns = document.querySelectorAll(".btn-copy-short-sales");
+        for (var csi = 0; csi < copyShortBtns.length; csi++) {
+          copyShortBtns[csi].addEventListener("click", async function (ev) {
+            var btn = ev.currentTarget;
+            var pkey = btn.getAttribute("data-project-key") || "vietcredit";
+            var tip = document.getElementById("copy-tip-" + pkey);
+            var proto = window.location && window.location.protocol;
+            var isHttp = proto === "http:" || proto === "https:";
+            var origin = isHttp ? window.location.origin : "";
+            var refCode = (state.data && state.data.ref) || state.viewCode || "";
+            var urlToCopy = (state.data && state.data.shortLink) || (origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) : "");
+
+            if (!urlToCopy) {
+              if (tip) {
+                tip.hidden = false;
+                tip.textContent = "Chưa có link bán hàng";
+                setTimeout(function () { tip.hidden = true; }, 2500);
+              }
+              return;
+            }
+
+            var copied = false;
+            if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+              try {
+                await navigator.clipboard.writeText(urlToCopy);
+                copied = true;
+              } catch (_e) {
+                copied = false;
+              }
+            }
+            if (!copied) {
+              try {
+                var ta = document.createElement("textarea");
+                ta.value = urlToCopy;
+                ta.setAttribute("readonly", "");
+                ta.className = "visually-hidden";
+                document.body.appendChild(ta);
+                ta.select();
+                copied = document.execCommand("copy");
+                document.body.removeChild(ta);
+              } catch (_e2) {
+                copied = false;
+              }
+            }
+
+            if (tip) {
+              tip.hidden = false;
+              tip.textContent = copied ? "Đã copy link!" : "Chưa thể copy";
+              setTimeout(function () { tip.hidden = true; }, 2000);
+            }
+          });
         }
 
         var reloadBtn = document.getElementById("btn-reload");
