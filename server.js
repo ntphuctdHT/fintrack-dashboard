@@ -370,18 +370,64 @@ async function getSettingsFromSupabase() {
   }
 }
 
-async function saveSettingsToSupabase(val) {
+async function saveSettingsToSupabase(val, key = "ctv_config") {
   try {
     const res = await supabaseFetch("app_settings", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify({
-        key: "ctv_config",
+        key,
         value: val,
         updated_at: new Date().toISOString()
       })
     });
     return res && res.ok;
+  } catch (_e) {
+    return false;
+  }
+}
+
+async function getLeadsSnapshotFromSupabase() {
+  try {
+    const res = await supabaseFetch("app_settings?key=eq.at_leads_cache&select=*");
+    if (!res || !res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    return rows[0].value;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function saveLeadsSnapshotToSupabase(leadsList) {
+  if (!Array.isArray(leadsList) || leadsList.length === 0) return false;
+  try {
+    const clean = leadsList.slice(0, 2000).map((l) => {
+      const subs = l && l.subs && typeof l.subs === "object" ? l.subs : {};
+      return {
+        conversionId: String(l.conversionId || ""),
+        campaignName: String(l.campaignName || "Sản phẩm tài chính"),
+        timeRaw: String(l.timeRaw || ""),
+        commission: Number.isFinite(Number(l.commission)) ? Math.round(Number(l.commission)) : 0,
+        statusKey: String(l.statusKey || "pending"),
+        subs: {
+          sub1: typeof subs.sub1 === "string" ? subs.sub1.trim() : "",
+          sub2: typeof subs.sub2 === "string" ? subs.sub2.trim() : "",
+          sub3: typeof subs.sub3 === "string" ? subs.sub3.trim() : "",
+          sub4: typeof subs.sub4 === "string" ? subs.sub4.trim() : ""
+        },
+        apiRiskLevel: normalizeRiskTier(l.apiRiskLevel)
+      };
+    });
+    const now = new Date();
+    // Snapshot TTL: 10 phút (giảm tải 100% việc gọi AccessTrade liên tục)
+    const expires = new Date(now.getTime() + 10 * 60000);
+    return await saveSettingsToSupabase({
+      cached_at: now.toISOString(),
+      expires_at: expires.toISOString(),
+      total_leads: clean.length,
+      leads: clean
+    }, "at_leads_cache");
   } catch (_e) {
     return false;
   }
@@ -1634,18 +1680,69 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
   let sourceLeads = Array.isArray(bridgeState.syncedLeads) ? bridgeState.syncedLeads : [];
   const effectiveKey = bridgeState.mode === "demo" ? "" : (bridgeRuntimeKey || ENV_ACCESSTRADE_KEY || (bridgeState && bridgeState.accessKey));
 
-  if (effectiveKey) {
+  if (bridgeState.mode !== "demo") {
+    let dbCache = null;
     try {
-      const now = new Date();
-      const start = new Date(now.getTime() - 29 * 86400000);
-      const rawList = await getCachedTransactions(
-        formatServerYmdGmt7(start),
-        formatServerYmdGmt7(now),
-        effectiveKey
-      );
-      sourceLeads = rawList.map(normalizeServerRawTransaction);
-    } catch (_ignoreFetchErr) {
-      // Nếu gọi upstream lỗi tạm thời thì fallback về snapshot đã đồng bộ gần nhất
+      dbCache = await getLeadsSnapshotFromSupabase();
+    } catch (_cacheErr) {}
+
+    let cachedLeads = null;
+    let expiresAt = null;
+    if (dbCache) {
+      if (Array.isArray(dbCache.leads) && dbCache.leads.length > 0) {
+        cachedLeads = dbCache.leads;
+        expiresAt = dbCache.expires_at;
+      } else if (Array.isArray(dbCache) && dbCache.length > 0) {
+        cachedLeads = dbCache;
+      }
+    }
+
+    const isExpired = !expiresAt || Date.now() > new Date(expiresAt).getTime();
+
+    if (cachedLeads && cachedLeads.length > 0) {
+      // Tải ngay từ snapshot Supabase (siêu tốc ~0.05s, loại bỏ hoàn toàn độ trễ serverless)
+      sourceLeads = cachedLeads;
+      bridgeState.syncedLeads = cachedLeads;
+
+      // Khi snapshot đã quá 10 phút và có API key, làm mới dữ liệu từ AccessTrade trong nền
+      if (isExpired && effectiveKey) {
+        try {
+          const now = new Date();
+          const start = new Date(now.getTime() - 29 * 86400000);
+          const rawList = await getCachedTransactions(
+            formatServerYmdGmt7(start),
+            formatServerYmdGmt7(now),
+            effectiveKey
+          );
+          const freshLeads = rawList.map(normalizeServerRawTransaction);
+          if (freshLeads.length > 0) {
+            sourceLeads = freshLeads;
+            bridgeState.syncedLeads = freshLeads;
+            saveLeadsSnapshotToSupabase(freshLeads).catch(() => {});
+          }
+        } catch (_fetchErr) {
+          // Khi AccessTrade API gặp lỗi (429 rate limit, 502, timeout),
+          // TUYỆT ĐỐI giữ nguyên dữ liệu snapshot có sẵn trên Supabase, không làm mất báo cáo của CTV
+        }
+      }
+    } else if (effectiveKey) {
+      // Chưa có snapshot trên Supabase: lấy trực tiếp từ AccessTrade và lưu snapshot
+      try {
+        const now = new Date();
+        const start = new Date(now.getTime() - 29 * 86400000);
+        const rawList = await getCachedTransactions(
+          formatServerYmdGmt7(start),
+          formatServerYmdGmt7(now),
+          effectiveKey
+        );
+        sourceLeads = rawList.map(normalizeServerRawTransaction);
+        if (sourceLeads.length > 0) {
+          bridgeState.syncedLeads = sourceLeads;
+          saveLeadsSnapshotToSupabase(sourceLeads).catch(() => {});
+        }
+      } catch (_ignoreFetchErr) {
+        // Fallback về bridgeState.syncedLeads
+      }
     }
   }
 
@@ -2076,6 +2173,9 @@ const server = http.createServer(async (req, res) => {
       accessKey: bridgeState.accessKey,
       ctvList: cleanCtvList
     }).catch(() => {});
+    if (bridgeState.mode !== "demo" && cleanLeads.length > 0) {
+      saveLeadsSnapshotToSupabase(cleanLeads).catch(() => {});
+    }
 
     sendJson(res, 200, {
       ok: true,
@@ -2231,6 +2331,10 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const data = await getCachedTransactions(since, until, effectiveKey);
+      if (Array.isArray(data) && data.length > 0 && bridgeState.mode !== "demo") {
+        const normalized = data.map(normalizeServerRawTransaction);
+        saveLeadsSnapshotToSupabase(normalized).catch(() => {});
+      }
       sendJson(res, 200, { data });
     } catch (err) {
       const status = err && err.statusCode === 502 ? 502 : 502;
