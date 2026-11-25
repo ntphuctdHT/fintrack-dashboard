@@ -33,7 +33,7 @@ function loadLocalEnvFile() {
           if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
             v = v.slice(1, -1);
           }
-          if (!process.env[k]) {
+          if (process.env[k] === undefined) {
             process.env[k] = v;
           }
         }
@@ -162,6 +162,44 @@ function sanitizeProjectsMap(raw) {
     };
   }
   return clean;
+}
+
+function hasProjectConfigData(proj) {
+  if (!proj || typeof proj !== "object") return false;
+  return Boolean(
+    (typeof proj.baseSalesLink === "string" && proj.baseSalesLink.trim()) ||
+    (typeof proj.publisher === "string" && proj.publisher.trim()) ||
+    (typeof proj.campaign === "string" && proj.campaign.trim()) ||
+    (typeof proj.targetUrl === "string" && proj.targetUrl.trim()) ||
+    (typeof proj.sampleLink === "string" && proj.sampleLink.trim())
+  );
+}
+
+function mergeCtvLinkConfigs(baseCfg, incomingCfg, preserveExistingProjects = true) {
+  const base = baseCfg && typeof baseCfg === "object" ? baseCfg : {};
+  const inc = incomingCfg && typeof incomingCfg === "object" ? incomingCfg : {};
+  const baseProjects = sanitizeProjectsMap(base.projects);
+  const incProjects = sanitizeProjectsMap(inc.projects);
+  const mergedProjects = { ...baseProjects };
+  for (const key of Object.keys(incProjects)) {
+    const incProj = incProjects[key];
+    const baseProj = mergedProjects[key];
+    if (preserveExistingProjects && baseProj && hasProjectConfigData(baseProj) && !hasProjectConfigData(incProj)) {
+      continue;
+    }
+    mergedProjects[key] = incProj;
+  }
+  return {
+    publisher: typeof inc.publisher === "string" ? inc.publisher.trim() : (typeof base.publisher === "string" ? base.publisher.trim() : ""),
+    campaign: typeof inc.campaign === "string" ? inc.campaign.trim() : (typeof base.campaign === "string" ? base.campaign.trim() : ""),
+    targetUrl: typeof inc.targetUrl === "string" ? inc.targetUrl.trim() : (typeof base.targetUrl === "string" ? base.targetUrl.trim() : ""),
+    baseSalesLink: typeof inc.baseSalesLink === "string" ? inc.baseSalesLink.trim() : (typeof base.baseSalesLink === "string" ? base.baseSalesLink.trim() : ""),
+    viewBase: typeof inc.viewBase === "string" ? inc.viewBase.trim().replace(/\/+$/, "") : (typeof base.viewBase === "string" ? base.viewBase.trim().replace(/\/+$/, "") : ""),
+    salesLinkMode: typeof inc.salesLinkMode === "string" && inc.salesLinkMode.trim() ? inc.salesLinkMode.trim() : (base.salesLinkMode || "short_auto"),
+    trackClicks: typeof inc.trackClicks === "boolean" ? inc.trackClicks : base.trackClicks !== false,
+    defaultProject: typeof inc.defaultProject === "string" && inc.defaultProject.trim() ? inc.defaultProject.trim() : (base.defaultProject || "vietcredit"),
+    projects: mergedProjects
+  };
 }
 
 function sanitizeClickStatsMap(rawMap) {
@@ -337,9 +375,25 @@ async function getCtvByRefFromSupabase(ref) {
   }
 }
 
-async function saveCtvsToSupabase(ctvList) {
-  if (!Array.isArray(ctvList) || ctvList.length === 0) return false;
+async function saveCtvsToSupabase(ctvList, replaceAll = false) {
+  if (!Array.isArray(ctvList)) return false;
   try {
+    if (replaceAll) {
+      const existing = await getCtvsFromSupabase();
+      if (Array.isArray(existing) && existing.length > 0) {
+        const keepRefs = new Set(ctvList.map((c) => String(c && c.ref || "").toLowerCase()).filter(Boolean));
+        const toDelete = existing.filter((ex) => ex && ex.ref && !keepRefs.has(String(ex.ref).toLowerCase()));
+        await Promise.all(
+          toDelete.map((ex) =>
+            Promise.all([
+              supabaseFetch(`ctvs?ref=eq.${encodeURIComponent(ex.ref)}`, { method: "DELETE" }),
+              supabaseFetch(`ctv_clicks?ref=eq.${encodeURIComponent(ex.ref)}`, { method: "DELETE" })
+            ])
+          )
+        );
+      }
+    }
+    if (ctvList.length === 0) return true;
     const rows = ctvList.map((c) => ({
       id: String(c.id || c.ref),
       name: String(c.name || "").slice(0, 40),
@@ -1672,7 +1726,7 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
     try {
       const freshSettings = await getSettingsFromSupabase();
       if (freshSettings) {
-        if (freshSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...freshSettings.ctvLinkConfig };
+        if (freshSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = mergeCtvLinkConfigs(bridgeState.ctvLinkConfig, freshSettings.ctvLinkConfig, false);
         if (freshSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...freshSettings.policy };
         if (freshSettings.accessKey && !bridgeRuntimeKey) bridgeRuntimeKey = freshSettings.accessKey;
         if (freshSettings.ctvShortLinks) bridgeState.ctvShortLinks = { ...bridgeState.ctvShortLinks, ...freshSettings.ctvShortLinks };
@@ -1970,7 +2024,7 @@ const server = http.createServer(async (req, res) => {
     if (!destObj || destObj.protocol !== "https:" || !isAllowedOutboundSalesHost(destObj.hostname)) {
       const dbSettingsForLink = await getSettingsFromSupabase();
       if (dbSettingsForLink && dbSettingsForLink.ctvLinkConfig) {
-        bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...dbSettingsForLink.ctvLinkConfig };
+        bridgeState.ctvLinkConfig = mergeCtvLinkConfigs(bridgeState.ctvLinkConfig, dbSettingsForLink.ctvLinkConfig, false);
         if (dbSettingsForLink.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettingsForLink.policy };
         const retryUrl = buildFallbackFullSalesLink(bridgeState.ctvLinkConfig, matchedCtv.ref,
           normalizeCtvFieldServer(bridgeState.policy && bridgeState.policy.ctvField), reqProjectKey);
@@ -2016,7 +2070,7 @@ const server = http.createServer(async (req, res) => {
       if (fetchedSettings) {
         dbSettings = fetchedSettings;
         if (fetchedSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...fetchedSettings.policy };
-        if (fetchedSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...fetchedSettings.ctvLinkConfig };
+        if (fetchedSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = mergeCtvLinkConfigs(bridgeState.ctvLinkConfig, fetchedSettings.ctvLinkConfig, false);
         if (fetchedSettings.ctvShortLinks) bridgeState.ctvShortLinks = { ...bridgeState.ctvShortLinks, ...fetchedSettings.ctvShortLinks };
         if (fetchedSettings.accessKey && !bridgeRuntimeKey) {
           bridgeRuntimeKey = fetchedSettings.accessKey;
@@ -2124,20 +2178,28 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    const targetMode = body.mode === "demo" ? "demo" : "real";
+    const incomingProjects = sanitizeProjectsMap(rawCfg.projects);
+    const hasIncomingProjects = Object.keys(incomingProjects).some((k) => hasProjectConfigData(incomingProjects[k]));
+    let baseLinkCfg = bridgeState.ctvLinkConfig || {};
+    const hasMemoryProjects = baseLinkCfg.projects && Object.keys(baseLinkCfg.projects).some((k) => hasProjectConfigData(baseLinkCfg.projects[k]));
+
+    // Nếu server vừa cold-start và client chưa gửi cấu hình dự án, nạp lại từ Supabase trước khi merge để tránh ghi đè rỗng
+    if (targetMode !== "demo" && !hasIncomingProjects && !hasMemoryProjects) {
+      const existingDbSettings = await getSettingsFromSupabase();
+      if (existingDbSettings && existingDbSettings.ctvLinkConfig) {
+        baseLinkCfg = mergeCtvLinkConfigs(baseLinkCfg, existingDbSettings.ctvLinkConfig, false);
+      }
+    }
+
+    const syncCfgPayload = body.ctvLinkConfig && typeof body.ctvLinkConfig === "object"
+      ? { ...rawCfg, trackClicks: rawCfg.trackClicks === true }
+      : rawCfg;
+
     bridgeState = {
-      mode: body.mode === "demo" ? "demo" : "real",
+      mode: targetMode,
       ctvList: cleanCtvList,
-      ctvLinkConfig: {
-        publisher: typeof rawCfg.publisher === "string" ? rawCfg.publisher.trim() : "",
-        campaign: typeof rawCfg.campaign === "string" ? rawCfg.campaign.trim() : "",
-        targetUrl: typeof rawCfg.targetUrl === "string" ? rawCfg.targetUrl.trim() : "",
-        baseSalesLink: typeof rawCfg.baseSalesLink === "string" ? rawCfg.baseSalesLink.trim() : "",
-        viewBase: typeof rawCfg.viewBase === "string" ? rawCfg.viewBase.trim().replace(/\/+$/, "") : "",
-        salesLinkMode: typeof rawCfg.salesLinkMode === "string" ? rawCfg.salesLinkMode.trim() : "short_auto",
-        trackClicks: rawCfg.trackClicks === true,
-        defaultProject: typeof rawCfg.defaultProject === "string" && rawCfg.defaultProject.trim() ? rawCfg.defaultProject.trim() : "vietcredit",
-        projects: sanitizeProjectsMap(rawCfg.projects)
-      },
+      ctvLinkConfig: mergeCtvLinkConfigs(baseLinkCfg, syncCfgPayload, true),
       ctvShortLinks:
         body.ctvShortLinks && typeof body.ctvShortLinks === "object" && !Array.isArray(body.ctvShortLinks)
           ? body.ctvShortLinks
@@ -2175,18 +2237,23 @@ const server = http.createServer(async (req, res) => {
     };
     saveBridgeStateToDisk();
 
-    // Luôn đồng bộ danh sách CTV và cấu hình lên Supabase để duy trì qua các lần khởi động serverless
-    saveCtvsToSupabase(cleanCtvList).catch(() => {});
-    saveSettingsToSupabase({
-      mode: bridgeState.mode,
-      policy: bridgeState.policy,
-      ctvLinkConfig: bridgeState.ctvLinkConfig,
-      ctvShortLinks: bridgeState.ctvShortLinks,
-      accessKey: bridgeState.accessKey,
-      ctvList: cleanCtvList
-    }).catch(() => {});
-    if (bridgeState.mode !== "demo" && cleanLeads.length > 0) {
-      saveLeadsSnapshotToSupabase(cleanLeads).catch(() => {});
+    // Chỉ đồng bộ lên Supabase ở chế độ thật và chờ hoàn tất trước khi phản hồi để Vercel serverless không đóng tiến trình sớm
+    if (bridgeState.mode !== "demo") {
+      const supaPromises = [
+        saveCtvsToSupabase(cleanCtvList, Boolean(body.replaceCtvList)),
+        saveSettingsToSupabase({
+          mode: bridgeState.mode,
+          policy: bridgeState.policy,
+          ctvLinkConfig: bridgeState.ctvLinkConfig,
+          ctvShortLinks: bridgeState.ctvShortLinks,
+          accessKey: bridgeState.accessKey,
+          ctvList: cleanCtvList
+        })
+      ];
+      if (cleanLeads.length > 0) {
+        supaPromises.push(saveLeadsSnapshotToSupabase(cleanLeads));
+      }
+      await Promise.all(supaPromises).catch(() => {});
     }
 
     sendJson(res, 200, {
@@ -2206,10 +2273,26 @@ const server = http.createServer(async (req, res) => {
     const ref = String(body.ref || "").trim();
     if (ctvId || ref) {
       bridgeState.ctvList = bridgeState.ctvList.filter((c) => c && c.id !== ctvId && c.ref !== ref);
+      if (ref && bridgeState.clickStats) {
+        delete bridgeState.clickStats[ref];
+      }
       saveBridgeStateToDisk();
       if (SUPABASE_URL && SUPABASE_KEY) {
-        if (ctvId) supabaseFetch(`ctvs?id=eq.${encodeURIComponent(ctvId)}`, { method: "DELETE" }).catch(() => {});
-        if (ref) supabaseFetch(`ctvs?ref=eq.${encodeURIComponent(ref)}`, { method: "DELETE" }).catch(() => {});
+        const delTasks = [];
+        if (ctvId) delTasks.push(supabaseFetch(`ctvs?id=eq.${encodeURIComponent(ctvId)}`, { method: "DELETE" }));
+        if (ref) {
+          delTasks.push(supabaseFetch(`ctvs?ref=eq.${encodeURIComponent(ref)}`, { method: "DELETE" }));
+          delTasks.push(supabaseFetch(`ctv_clicks?ref=eq.${encodeURIComponent(ref)}`, { method: "DELETE" }));
+        }
+        delTasks.push(saveSettingsToSupabase({
+          mode: bridgeState.mode,
+          policy: bridgeState.policy,
+          ctvLinkConfig: bridgeState.ctvLinkConfig,
+          ctvShortLinks: bridgeState.ctvShortLinks,
+          accessKey: bridgeState.accessKey,
+          ctvList: bridgeState.ctvList
+        }));
+        await Promise.all(delTasks).catch(() => {});
       }
     }
     sendJson(res, 200, { ok: true, count: bridgeState.ctvList.length });
@@ -2241,7 +2324,7 @@ const server = http.createServer(async (req, res) => {
       const dbSettings = await getSettingsFromSupabase();
       if (dbSettings) {
         if (dbSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettings.policy };
-        if (dbSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...dbSettings.ctvLinkConfig };
+        if (dbSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = mergeCtvLinkConfigs(bridgeState.ctvLinkConfig, dbSettings.ctvLinkConfig, false);
         if (dbSettings.accessKey && !bridgeRuntimeKey) {
           bridgeRuntimeKey = dbSettings.accessKey;
         }

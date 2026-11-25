@@ -723,6 +723,8 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     env: {
       ...process.env,
       ACCESSTRADE_KEY: "",
+      SUPABASE_URL: "",
+      SUPABASE_KEY: "",
       PORT: String(serverPort),
       ALLOWED_ORIGIN: "https://dashboard.example.vn",
       AT_BASE: `http://127.0.0.1:${mockPort}`,

@@ -6,6 +6,8 @@ test("Multi-project link isolation: VietCredit and TNEX are cleanly separated, s
   const child = spawn(process.execPath, ["server.js"], {
     env: {
       ...process.env,
+      SUPABASE_URL: "",
+      SUPABASE_KEY: "",
       PORT: "0"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -111,6 +113,35 @@ test("Multi-project link isolation: VietCredit and TNEX are cleanly separated, s
     assert.equal(clicksRes.status, 200);
     const clicksData = await clicksRes.json();
     assert.equal(clicksData.clicksByRef[testRef].total, 2);
+
+    // 6. Test TNEX persistence guard: Even if a subsequent sync sends empty projects ({}), TNEX stays intact
+    const partialSyncRes = await fetch(`http://127.0.0.1:${serverPort}/api/ctv-bridge/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "demo",
+        ctvList: [{ id: "c1", name: "Hoàng", ref: testRef, view: testView, active: true }],
+        ctvLinkConfig: {
+          publisher: "4608706208340350795",
+          campaign: "6997817930567730686",
+          targetUrl: "https://tinvay.vietcredit.com.vn/",
+          viewBase: `http://127.0.0.1:${serverPort}`,
+          salesLinkMode: "short_auto",
+          trackClicks: true,
+          projects: {}
+        }
+      })
+    });
+    assert.equal(partialSyncRes.status, 200);
+
+    const viewAfterPartialRes = await fetch(`http://127.0.0.1:${serverPort}/api/view/${testView}`);
+    assert.equal(viewAfterPartialRes.status, 200);
+    const viewAfterPartial = await viewAfterPartialRes.json();
+    assert.equal(viewAfterPartial.project_links.tnex, tnexLink, "TNEX project link must survive partial/empty projects sync!");
+
+    const tnexRedirAfterRes = await fetch(tnexLink, { redirect: "manual" });
+    assert.equal(tnexRedirAfterRes.status, 302);
+    assert.ok(tnexRedirAfterRes.headers.get("location").includes("54930219483012948"), "TNEX redirect must still resolve TNEX campaign!");
 
   } finally {
     child.kill();

@@ -3225,8 +3225,11 @@
           viewBase: "",
           baseSalesLink: "",
           salesLinkMode: "short_auto",
-          trackClicks: true
+          trackClicks: true,
+          defaultProject: "vietcredit",
+          projects: {}
         },
+        cloudBootstrapped: false,
         ctvList: [],
         ctvShortLinks: {},
         ctvClicks: {},
@@ -4932,6 +4935,10 @@
               } else if (vbValidation.cleanUrl) {
                 healedViewBase = vbValidation.cleanUrl;
               }
+              var parsedProjects =
+                parsedLinkCfg.projects && typeof parsedLinkCfg.projects === "object" && !Array.isArray(parsedLinkCfg.projects)
+                  ? JSON.parse(JSON.stringify(parsedLinkCfg.projects))
+                  : {};
               state.ctvLinkConfig = {
                 publisher: typeof parsedLinkCfg.publisher === "string" ? parsedLinkCfg.publisher.trim() : "",
                 campaign: typeof parsedLinkCfg.campaign === "string" ? parsedLinkCfg.campaign.trim() : "",
@@ -4939,7 +4946,12 @@
                 viewBase: healedViewBase,
                 baseSalesLink: typeof parsedLinkCfg.baseSalesLink === "string" ? parsedLinkCfg.baseSalesLink.trim() : "",
                 salesLinkMode: normalizeSalesLinkMode(parsedLinkCfg.salesLinkMode),
-                trackClicks: parsedLinkCfg.trackClicks !== false
+                trackClicks: parsedLinkCfg.trackClicks !== false,
+                defaultProject:
+                  typeof parsedLinkCfg.defaultProject === "string" && parsedLinkCfg.defaultProject.trim()
+                    ? parsedLinkCfg.defaultProject.trim()
+                    : "vietcredit",
+                projects: parsedProjects
               };
             }
           }
@@ -5280,7 +5292,44 @@
         }
       }
 
-      function syncCtvBridgeToServer() {
+      function hasClientProjectData(proj) {
+        if (!proj || typeof proj !== "object") return false;
+        return Boolean(
+          (typeof proj.baseSalesLink === "string" && proj.baseSalesLink.trim()) ||
+          (typeof proj.publisher === "string" && proj.publisher.trim()) ||
+          (typeof proj.campaign === "string" && proj.campaign.trim()) ||
+          (typeof proj.targetUrl === "string" && proj.targetUrl.trim()) ||
+          (typeof proj.sampleLink === "string" && proj.sampleLink.trim())
+        );
+      }
+
+      function mergeClientCtvLinkConfig(baseCfg, incomingCfg, preserveExisting) {
+        var base = baseCfg && typeof baseCfg === "object" ? baseCfg : {};
+        var inc = incomingCfg && typeof incomingCfg === "object" ? incomingCfg : {};
+        var baseProjects = base.projects && typeof base.projects === "object" && !Array.isArray(base.projects) ? base.projects : {};
+        var incProjects = inc.projects && typeof inc.projects === "object" && !Array.isArray(inc.projects) ? inc.projects : {};
+        var mergedProjects = {};
+        var bk;
+        for (bk in baseProjects) {
+          if (Object.prototype.hasOwnProperty.call(baseProjects, bk) && baseProjects[bk] && typeof baseProjects[bk] === "object") {
+            mergedProjects[bk] = Object.assign({}, baseProjects[bk]);
+          }
+        }
+        var ik;
+        for (ik in incProjects) {
+          if (!Object.prototype.hasOwnProperty.call(incProjects, ik) || !incProjects[ik] || typeof incProjects[ik] !== "object") continue;
+          if (preserveExisting && mergedProjects[ik] && hasClientProjectData(mergedProjects[ik]) && !hasClientProjectData(incProjects[ik])) {
+            continue;
+          }
+          mergedProjects[ik] = Object.assign({}, mergedProjects[ik] || {}, incProjects[ik]);
+        }
+        return Object.assign({}, base, inc, {
+          defaultProject: (typeof inc.defaultProject === "string" && inc.defaultProject.trim()) ? inc.defaultProject.trim() : (base.defaultProject || "vietcredit"),
+          projects: mergedProjects
+        });
+      }
+
+      function syncCtvBridgeToServer(syncOptions) {
         try {
           var ep = buildCtvBridgeSyncEndpoint(state.serverUrl);
           if (!ep || typeof window.fetch !== "function") return Promise.resolve(false);
@@ -5305,6 +5354,7 @@
               headers: headers,
               body: JSON.stringify({
                 mode: state.mode,
+                replaceCtvList: Boolean(syncOptions && syncOptions.replaceCtvList),
                 ctvList: state.ctvList,
                 ctvLinkConfig: state.ctvLinkConfig,
                 ctvShortLinks: state.ctvShortLinks,
@@ -5387,12 +5437,19 @@
                   if (p.ctvRates) state.ctvRates = Object.assign({}, state.ctvRates, p.ctvRates);
                   if (p.leadRisks) state.leadRisks = Object.assign({}, state.leadRisks, p.leadRisks);
                   if (p.ctvBadges && typeof p.ctvBadges === "object") state.ctvBadges = p.ctvBadges;
-                  if (p.ctvExtraStats && typeof p.ctvExtraStats === "object") state.ctvExtraStats = p.ctvExtraStats;
+                  if (p.ctvExtraStats && typeof p.ctvExtraStats === "object") {
+                    state.ctvExtraStats = p.ctvExtraStats;
+                    saveCtvExtraStatsToStorage();
+                  }
                   savePolicyToStorage();
                   hasUpdates = true;
                 }
                 if (data.settings.ctvLinkConfig && typeof data.settings.ctvLinkConfig === "object") {
-                  state.ctvLinkConfig = Object.assign({}, state.ctvLinkConfig, data.settings.ctvLinkConfig);
+                  state.ctvLinkConfig = mergeClientCtvLinkConfig(
+                    state.ctvLinkConfig,
+                    data.settings.ctvLinkConfig,
+                    true
+                  );
                   saveCtvLinkConfigToStorage();
                   hasUpdates = true;
                 }
@@ -5406,16 +5463,20 @@
                 state.ctvClicks = data.clicksByRef;
                 hasUpdates = true;
               }
+              state.cloudBootstrapped = true;
               if (hasUpdates) {
+                renderCtvLinkConfigInputs();
                 if (!state.loading) renderOverview();
                 renderCtvListOnly();
               }
               return true;
             })
             .catch(function () {
+              state.cloudBootstrapped = true;
               return false;
             });
         } catch (_ignoreBootErr) {
+          state.cloudBootstrapped = true;
           return Promise.resolve(false);
         }
       }
@@ -7716,7 +7777,14 @@
         // Nút Lưu riêng cho dự án VietCredit
         var saveVcBtn = document.getElementById("btn-save-project-vietcredit");
         if (saveVcBtn) {
-          saveVcBtn.addEventListener("click", function () {
+          saveVcBtn.addEventListener("click", async function () {
+            var vcLinkVal = sampleLinkInput ? sampleLinkInput.value.trim() : "";
+            var vcPubVal = (document.getElementById("input-ctv-publisher") || {}).value || "";
+            var vcCampVal = (document.getElementById("input-ctv-campaign") || {}).value || "";
+            var vcBaseVal = (document.getElementById("input-ctv-base-link") || {}).value || "";
+            if (vcLinkVal && !vcBaseVal.trim() && (!vcPubVal.trim() || !vcCampVal.trim())) {
+              await handleParseSampleLink();
+            }
             var nextCfg = readCtvLinkConfigFromInputs();
             var vc = (nextCfg.projects && nextCfg.projects.vietcredit) || {};
             var hasVal = Boolean(vc.baseSalesLink || (vc.publisher && vc.campaign && vc.targetUrl));
@@ -7724,25 +7792,34 @@
               showToast("warning", "Vui lòng nhập link hoặc điền Mã publisher, Chiến dịch và Link đích cho VietCredit.");
               return;
             }
-            state.ctvLinkConfig = nextCfg;
+            state.ctvLinkConfig = mergeClientCtvLinkConfig(state.ctvLinkConfig, nextCfg, true);
             saveCtvLinkConfigToStorage();
             renderCtvLinkConfigInputs();
             renderCtvListOnly();
-            syncCtvBridgeToServer();
+            saveVcBtn.disabled = true;
+            var synced = await syncCtvBridgeToServer();
+            saveVcBtn.disabled = false;
             var tip = document.getElementById("save-tip-vietcredit");
             if (tip) {
-              tip.textContent = "✔ Đã lưu cấu hình VietCredit & đồng bộ!";
+              tip.textContent = synced ? "✔ Đã lưu cấu hình VietCredit & đồng bộ Cloud!" : "✔ Đã lưu trên máy (chờ đồng bộ Cloud)!";
               tip.hidden = false;
-              setTimeout(function () { tip.hidden = true; }, 3000);
+              setTimeout(function () { tip.hidden = true; }, 3500);
             }
-            showToast("success", "Đã lưu cấu hình dự án VietCredit thành công.");
+            showToast("success", synced ? "Đã lưu & đồng bộ cấu hình VietCredit lên Cloud." : "Đã lưu cấu hình VietCredit trên trình duyệt.");
           });
         }
 
         // Nút Lưu riêng cho dự án TNEX
         var saveTnexBtn = document.getElementById("btn-save-project-tnex");
         if (saveTnexBtn) {
-          saveTnexBtn.addEventListener("click", function () {
+          saveTnexBtn.addEventListener("click", async function () {
+            var tnexLinkVal = tnexLinkInput ? tnexLinkInput.value.trim() : "";
+            var tnexPubVal = (document.getElementById("input-project-tnex-publisher") || {}).value || "";
+            var tnexCampVal = (document.getElementById("input-project-tnex-campaign") || {}).value || "";
+            var tnexBaseVal = (document.getElementById("input-project-tnex-base-link") || {}).value || "";
+            if (tnexLinkVal && !tnexBaseVal.trim() && (!tnexPubVal.trim() || !tnexCampVal.trim())) {
+              await handleParseTnexLink();
+            }
             var nextCfg = readCtvLinkConfigFromInputs();
             var tnex = (nextCfg.projects && nextCfg.projects.tnex) || {};
             var hasVal = Boolean(tnex.baseSalesLink || (tnex.publisher && tnex.campaign && tnex.targetUrl));
@@ -7750,18 +7827,20 @@
               showToast("warning", "Vui lòng nhập link hoặc điền Mã publisher, Chiến dịch và Link đích cho TNEX.");
               return;
             }
-            state.ctvLinkConfig = nextCfg;
+            state.ctvLinkConfig = mergeClientCtvLinkConfig(state.ctvLinkConfig, nextCfg, true);
             saveCtvLinkConfigToStorage();
             renderCtvLinkConfigInputs();
             renderCtvListOnly();
-            syncCtvBridgeToServer();
+            saveTnexBtn.disabled = true;
+            var synced = await syncCtvBridgeToServer();
+            saveTnexBtn.disabled = false;
             var tip = document.getElementById("save-tip-tnex");
             if (tip) {
-              tip.textContent = "✔ Đã lưu cấu hình TNEX & đồng bộ!";
+              tip.textContent = synced ? "✔ Đã lưu cấu hình TNEX & đồng bộ Cloud!" : "✔ Đã lưu trên máy (chờ đồng bộ Cloud)!";
               tip.hidden = false;
-              setTimeout(function () { tip.hidden = true; }, 3000);
+              setTimeout(function () { tip.hidden = true; }, 3500);
             }
-            showToast("success", "Đã lưu cấu hình dự án TNEX thành công.");
+            showToast("success", synced ? "Đã lưu & đồng bộ cấu hình TNEX lên Cloud." : "Đã lưu cấu hình TNEX trên trình duyệt.");
           });
         }
 
@@ -8022,7 +8101,7 @@
 
         var ctvLinkForm = document.getElementById("ctv-link-config-form");
         if (ctvLinkForm) {
-          ctvLinkForm.addEventListener("submit", function (event) {
+          ctvLinkForm.addEventListener("submit", async function (event) {
             event.preventDefault();
             var nextCfg = readCtvLinkConfigFromInputs();
             var validation = validateCtvLinkConfig(nextCfg);
@@ -8032,12 +8111,12 @@
               return;
             }
 
-            state.ctvLinkConfig = nextCfg;
+            state.ctvLinkConfig = mergeClientCtvLinkConfig(state.ctvLinkConfig, nextCfg, true);
             state.sampleShortCheck = null;
             saveCtvLinkConfigToStorage();
             renderCtvLinkConfigInputs();
             renderCtvListOnly();
-            syncCtvBridgeToServer();
+            await syncCtvBridgeToServer();
             showCtvLinkConfigFeedback(
               "success",
               isShortSalesLinkMode(nextCfg.salesLinkMode)
@@ -8394,17 +8473,17 @@
               saveCtvListToStorage();
               renderCtvListOnly();
               renderLeads();
-              syncCtvBridgeToServer();
               try {
                 var epDel =
                   (state.serverUrl ? state.serverUrl.replace(/\/+$/, "") : window.location.origin) +
                   "/api/ctv-bridge/delete";
-                window.fetch(epDel, {
+                await window.fetch(epDel, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ ctvId: ctvId, ref: targetCtv.ref })
                 }).catch(function () { });
               } catch (_e) { }
+              await syncCtvBridgeToServer({ replaceCtvList: true });
               showToast("success", "Đã xoá vĩnh viễn CTV " + targetCtv.name + ".");
               return;
             }
@@ -8457,7 +8536,7 @@
               saveCtvListToStorage();
               renderCtvListOnly();
               renderLeads();
-              syncCtvBridgeToServer();
+              syncCtvBridgeToServer({ replaceCtvList: true });
               showToast(
                 "success",
                 "Đã khôi phục " + validated.list.length.toLocaleString("vi-VN") + " CTV từ file sao lưu."
@@ -8548,8 +8627,9 @@
       applyTheme(state.theme);
       bindEvents();
       switchTab("overview");
-      loadData();
-      bootstrapFromCloud();
+      bootstrapFromCloud().then(function () {
+        return loadData();
+      });
     })();
   </script>
 </body>
