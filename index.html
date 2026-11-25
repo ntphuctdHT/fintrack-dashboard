@@ -2480,40 +2480,6 @@
             <div id="ctv-badges-feedback" role="status" aria-live="polite" hidden></div>
           </form>
 
-          <form class="card settings-form" id="project-links-form" novalidate>
-            <div>
-              <h2 class="card-title" id="project-links-heading">Cấu hình link dự án cho CTV (VietCredit &amp; TNEX)</h2>
-              <p class="field-hint">
-                Dán link tiếp thị của 2 dự án dưới đây. Link này sẽ được đồng bộ và cung cấp cho tất cả các trang xem của CTV (nút &ldquo;Copy&rdquo; trên từng dự án).
-              </p>
-            </div>
-
-            <div class="field-group">
-              <label class="field-label" for="input-link-vietcredit">Link dự án VietCredit</label>
-              <div class="input-with-actions-row">
-                <input class="text-input" id="input-link-vietcredit" name="vietcreditLink" type="url" placeholder="https://fast.accesstrade.com.vn/..." autocomplete="off" />
-                <button type="button" class="secondary-btn btn-sm" id="btn-paste-vietcredit">Dán link</button>
-                <button type="button" class="secondary-btn btn-sm" id="btn-auto-vietcredit">Link mẫu</button>
-              </div>
-              <p class="field-hint">Dán link chiến dịch VietCredit từ AccessTrade hoặc bấm Dán link từ clipboard.</p>
-            </div>
-
-            <div class="field-group">
-              <label class="field-label" for="input-link-tnex">Link dự án TNEX (MSB)</label>
-              <div class="input-with-actions-row">
-                <input class="text-input" id="input-link-tnex" name="tnexLink" type="url" placeholder="https://fast.accesstrade.com.vn/..." autocomplete="off" />
-                <button type="button" class="secondary-btn btn-sm" id="btn-paste-tnex">Dán link</button>
-                <button type="button" class="secondary-btn btn-sm" id="btn-auto-tnex">Link mẫu</button>
-              </div>
-              <p class="field-hint">Dán link chiến dịch TNEX (MSB) từ AccessTrade hoặc bấm Dán link từ clipboard.</p>
-            </div>
-
-            <button type="submit" class="primary-btn" id="btn-save-project-links">
-              Lưu link 2 dự án cho CTV
-            </button>
-            <div id="project-links-feedback" role="status" aria-live="polite" hidden></div>
-          </form>
-
           <section class="card settings-form" id="section-ctv-extra-stats" aria-labelledby="extra-stats-heading">
             <div>
               <h2 class="card-title" id="extra-stats-heading">Thêm số liệu vào bảng dashboard cộng tác viên</h2>
@@ -2896,7 +2862,6 @@
       var CTV_LIST_STORAGE_KEY = "dasboard_fin_ctv_list_v1";
       var CTV_SHORT_LINKS_STORAGE_KEY = "dasboard_fin_ctv_short_links_v1";
       var CTV_BADGES_STORAGE_KEY = "dasboard_fin_ctv_badges_v1";
-      var PROJECT_LINKS_STORAGE_KEY = "dasboard_fin_project_links_v1";
       var CTV_EXTRA_STATS_STORAGE_KEY = "dasboard_fin_ctv_extra_stats_v1";
       var VALID_SALES_LINK_MODES = ["short_auto", "short_isgd", "short_accesstrade", "full"];
       var CTV_CHARSET = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -2929,10 +2894,6 @@
           reconciled: true,
           cancelled: true,
           commission: true
-        },
-        projectLinks: {
-          vietcredit: "",
-          tnex: ""
         },
         ctvExtraStats: {},
         ctvLinkConfig: {
@@ -4655,18 +4616,6 @@
         }
 
         try {
-          var rawProjLinks = window.localStorage.getItem(PROJECT_LINKS_STORAGE_KEY);
-          if (rawProjLinks) {
-            var parsedProjLinks = JSON.parse(rawProjLinks);
-            if (parsedProjLinks && typeof parsedProjLinks === "object") {
-              state.projectLinks = Object.assign({}, state.projectLinks, parsedProjLinks);
-            }
-          }
-        } catch (_errProjLinks) {
-          // Bỏ qua lỗi localStorage
-        }
-
-        try {
           var rawExtraStats = window.localStorage.getItem(CTV_EXTRA_STATS_STORAGE_KEY);
           if (rawExtraStats) {
             var parsedExtraStats = JSON.parse(rawExtraStats);
@@ -4718,18 +4667,6 @@
           window.localStorage.setItem(
             CTV_BADGES_STORAGE_KEY,
             JSON.stringify(state.ctvBadges)
-          );
-          return true;
-        } catch (_err) {
-          return false;
-        }
-      }
-
-      function saveProjectLinksToStorage() {
-        try {
-          window.localStorage.setItem(
-            PROJECT_LINKS_STORAGE_KEY,
-            JSON.stringify(state.projectLinks)
           );
           return true;
         } catch (_err) {
@@ -5011,7 +4948,6 @@
                   ctvRates: state.ctvRates,
                   leadRisks: state.leadRisks,
                   ctvBadges: state.ctvBadges,
-                  projectLinks: state.projectLinks,
                   ctvExtraStats: state.ctvExtraStats
                 },
                 leads: compactLeads
@@ -5963,16 +5899,6 @@
           if (chk) {
             chk.checked = state.ctvBadges[bk] !== false;
           }
-        }
-
-        // Populate project links inputs
-        var vcLinkEl = document.getElementById("input-link-vietcredit");
-        var tnexLinkEl = document.getElementById("input-link-tnex");
-        if (vcLinkEl && document.activeElement !== vcLinkEl) {
-          vcLinkEl.value = (state.projectLinks && state.projectLinks.vietcredit) || "";
-        }
-        if (tnexLinkEl && document.activeElement !== tnexLinkEl) {
-          tnexLinkEl.value = (state.projectLinks && state.projectLinks.tnex) || "";
         }
 
         populateExtraStatsCtvSelect();
@@ -7093,77 +7019,6 @@
             saveCtvBadgesToStorage();
             syncCtvBridgeToServer();
             showCtvBadgesFeedback("success", "Đã lưu cấu hình hiển thị thẻ cho CTV.");
-          });
-        }
-
-        var projLinksForm = document.getElementById("project-links-form");
-        if (projLinksForm) {
-          projLinksForm.addEventListener("submit", function (event) {
-            event.preventDefault();
-            var vcInput = document.getElementById("input-link-vietcredit");
-            var tnexInput = document.getElementById("input-link-tnex");
-            state.projectLinks = {
-              vietcredit: vcInput ? vcInput.value.trim() : "",
-              tnex: tnexInput ? tnexInput.value.trim() : ""
-            };
-            saveProjectLinksToStorage();
-            syncCtvBridgeToServer();
-            showFeedbackBox("project-links-feedback", "success", "Đã lưu và đồng bộ link 2 dự án cho tất cả trang CTV.");
-            showToast("success", "Đã lưu link dự án VietCredit & TNEX.");
-          });
-        }
-
-        var btnPasteVc = document.getElementById("btn-paste-vietcredit");
-        if (btnPasteVc) {
-          btnPasteVc.addEventListener("click", async function () {
-            try {
-              var text = await navigator.clipboard.readText();
-              var vcInput = document.getElementById("input-link-vietcredit");
-              if (vcInput && text) {
-                vcInput.value = text.trim();
-                showToast("success", "Đã dán link VietCredit từ clipboard.");
-              }
-            } catch (_e) {
-              showToast("warning", "Không thể đọc clipboard tự động, vui lòng dán thủ công.");
-            }
-          });
-        }
-
-        var btnAutoVc = document.getElementById("btn-auto-vietcredit");
-        if (btnAutoVc) {
-          btnAutoVc.addEventListener("click", function () {
-            var vcInput = document.getElementById("input-link-vietcredit");
-            if (vcInput) {
-              vcInput.value = "https://fast.accesstrade.com.vn/deep_link/6301306121406691458/5113946282216599728";
-              showToast("info", "Đã điền link mẫu VietCredit.");
-            }
-          });
-        }
-
-        var btnPasteTnex = document.getElementById("btn-paste-tnex");
-        if (btnPasteTnex) {
-          btnPasteTnex.addEventListener("click", async function () {
-            try {
-              var text = await navigator.clipboard.readText();
-              var tnexInput = document.getElementById("input-link-tnex");
-              if (tnexInput && text) {
-                tnexInput.value = text.trim();
-                showToast("success", "Đã dán link TNEX từ clipboard.");
-              }
-            } catch (_e) {
-              showToast("warning", "Không thể đọc clipboard tự động, vui lòng dán thủ công.");
-            }
-          });
-        }
-
-        var btnAutoTnex = document.getElementById("btn-auto-tnex");
-        if (btnAutoTnex) {
-          btnAutoTnex.addEventListener("click", function () {
-            var tnexInput = document.getElementById("input-link-tnex");
-            if (tnexInput) {
-              tnexInput.value = "https://fast.accesstrade.com.vn/deep_link/6301306121406691458/494045799";
-              showToast("info", "Đã điền link mẫu TNEX.");
-            }
           });
         }
 

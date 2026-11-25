@@ -1642,7 +1642,6 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
       high:   Number(ctvRates.high)   > 0 ? Number(ctvRates.high)   : DEFAULT_CTV_RATES.high
     },
     badges: (bridgeState.policy && bridgeState.policy.ctvBadges) || null,
-    project_links: (bridgeState.policy && bridgeState.policy.projectLinks) || {},
     extra_stats: (bridgeState.policy && bridgeState.policy.ctvExtraStats && bridgeState.policy.ctvExtraStats[ctv.ref]) || null
   };
 }
@@ -1888,16 +1887,6 @@ const server = http.createServer(async (req, res) => {
           rawPolicy.ctvBadges && typeof rawPolicy.ctvBadges === "object" && !Array.isArray(rawPolicy.ctvBadges)
             ? rawPolicy.ctvBadges
             : (bridgeState.policy && bridgeState.policy.ctvBadges) || null,
-        projectLinks: {
-          vietcredit:
-            typeof (rawPolicy.projectLinks && rawPolicy.projectLinks.vietcredit) === "string"
-              ? rawPolicy.projectLinks.vietcredit.trim()
-              : (bridgeState.policy && bridgeState.policy.projectLinks && bridgeState.policy.projectLinks.vietcredit) || "",
-          tnex:
-            typeof (rawPolicy.projectLinks && rawPolicy.projectLinks.tnex) === "string"
-              ? rawPolicy.projectLinks.tnex.trim()
-              : (bridgeState.policy && bridgeState.policy.projectLinks && bridgeState.policy.projectLinks.tnex) || ""
-        },
         ctvExtraStats:
           rawPolicy.ctvExtraStats && typeof rawPolicy.ctvExtraStats === "object" && !Array.isArray(rawPolicy.ctvExtraStats)
             ? rawPolicy.ctvExtraStats
