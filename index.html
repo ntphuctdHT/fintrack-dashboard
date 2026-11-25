@@ -5269,6 +5269,8 @@
                   if (p.atRates) state.atRates = Object.assign({}, state.atRates, p.atRates);
                   if (p.ctvRates) state.ctvRates = Object.assign({}, state.ctvRates, p.ctvRates);
                   if (p.leadRisks) state.leadRisks = Object.assign({}, state.leadRisks, p.leadRisks);
+                  if (p.ctvBadges && typeof p.ctvBadges === "object") state.ctvBadges = p.ctvBadges;
+                  if (p.ctvExtraStats && typeof p.ctvExtraStats === "object") state.ctvExtraStats = p.ctvExtraStats;
                   savePolicyToStorage();
                   hasUpdates = true;
                 }

@@ -1297,6 +1297,11 @@ function getTrackedBaseUrl(cfg, reqOrigin) {
   return reqOrigin || "";
 }
 
+function isAllowedOutboundSalesHost(hostname) {
+  const host = String(hostname || "").trim().toLowerCase();
+  return isAccessTradeTrackingHost(host) || ALLOWED_SHORTENER_HOSTS.has(host);
+}
+
 function isRealHumanClickRequest(req) {
   const method = (req.method || "GET").toUpperCase();
   if (method !== "GET") return false;
@@ -1313,7 +1318,7 @@ function isRealHumanClickRequest(req) {
   }
   const ua = String(req.headers["user-agent"] || "");
   if (
-    /(facebookexternalhit|facebot|zalopc|zalo\/|telegrambot|slackbot|whatsapp|discordbot|googlebot|bingbot|twitterbot|linkedinbot|applebot|bot\b|crawler|spider|preview)/i.test(
+    /(facebookexternalhit|facebot|zalobot|zalo-bot|telegrambot|slackbot|whatsapp|discordbot|googlebot|bingbot|twitterbot|linkedinbot|applebot|\bbot\b|\bcrawler\b|\bspider\b)/i.test(
       ua
     )
   ) {
@@ -1323,7 +1328,7 @@ function isRealHumanClickRequest(req) {
 }
 
 function recordRealClick(ref) {
-  if (!/^[a-z0-9]{4,20}$/i.test(String(ref || ""))) return null;
+  if (!/^[a-z0-9_]{3,40}$/i.test(String(ref || ""))) return null;
   if (!bridgeState.clickStats || typeof bridgeState.clickStats !== "object") {
     bridgeState.clickStats = {};
   }
@@ -1381,7 +1386,7 @@ function buildClicksSummaryMap() {
     }
   }
   for (const ref of seen) {
-    if (/^[a-z0-9]{4,20}$/i.test(ref)) {
+    if (/^[a-z0-9_]{3,40}$/i.test(ref)) {
       out[ref] = getClickSummaryForRef(ref);
     }
   }
@@ -1442,14 +1447,15 @@ function findSalesLinkForCtv(ctv, reqOrigin) {
   const cfg = bridgeState.ctvLinkConfig || {};
   const field = normalizeCtvFieldServer(bridgeState.policy && bridgeState.policy.ctvField);
   const fullUrl = buildFallbackFullSalesLink(cfg, ctv.ref, field);
-  if (!fullUrl || !fullUrl.startsWith("https://")) return "";
+
+  // Luôn ưu tiên link tracking /l/<ref> nếu có cấu hình viewBase hợp lệ
+  const trackedBase = getTrackedBaseUrl(cfg, reqOrigin);
+  const trackedUrl = trackedBase ? trackedBase.replace(/\/+$/, "") + "/l/" + encodeURIComponent(ctv.ref) : "";
 
   const mode = typeof cfg.salesLinkMode === "string" && cfg.salesLinkMode ? cfg.salesLinkMode : "short_auto";
   const cacheMap = bridgeState.ctvShortLinks || {};
 
   if (cfg.trackClicks === true && mode !== "short_accesstrade") {
-    const trackedBase = getTrackedBaseUrl(cfg, reqOrigin);
-    const trackedUrl = trackedBase ? trackedBase + "/l/" + encodeURIComponent(ctv.ref) : "";
     if (trackedUrl && isAllowedClientSalesUrl(trackedUrl)) {
       if (mode !== "full") {
         const trackedCacheEntry = cacheMap[mode + "|" + trackedUrl];
@@ -1476,25 +1482,31 @@ function findSalesLinkForCtv(ctv, reqOrigin) {
     }
   }
 
-  const exactEntry = cacheMap[mode + "|" + fullUrl];
-  if (exactEntry && typeof exactEntry.shortUrl === "string" && exactEntry.shortUrl.startsWith("https://")) {
-    return exactEntry.shortUrl;
-  }
-
-  for (const key of Object.keys(cacheMap)) {
-    const entry = cacheMap[key];
-    if (
-      entry &&
-      typeof entry.shortUrl === "string" &&
-      entry.shortUrl.startsWith("https://") &&
-      typeof entry.fullUrl === "string" &&
-      entry.fullUrl.includes(field + "=" + ctv.ref)
-    ) {
-      return entry.shortUrl;
+  if (fullUrl && fullUrl.startsWith("https://")) {
+    const exactEntry = cacheMap[mode + "|" + fullUrl];
+    if (exactEntry && typeof exactEntry.shortUrl === "string" && exactEntry.shortUrl.startsWith("https://")) {
+      return exactEntry.shortUrl;
     }
+
+    for (const key of Object.keys(cacheMap)) {
+      const entry = cacheMap[key];
+      if (
+        entry &&
+        typeof entry.shortUrl === "string" &&
+        entry.shortUrl.startsWith("https://") &&
+        typeof entry.fullUrl === "string" &&
+        entry.fullUrl.includes(field + "=" + ctv.ref)
+      ) {
+        return entry.shortUrl;
+      }
+    }
+
+    return fullUrl;
   }
 
-  return fullUrl;
+  // Fallback cuối: link tracking bridge /l/<ref> dùng reqOrigin
+  if (trackedUrl) return trackedUrl;
+  return reqOrigin ? reqOrigin.replace(/\/+$/, "") + "/l/" + encodeURIComponent(ctv.ref) : "";
 }
 
 function normalizeServerRawTransaction(raw, idx) {
@@ -1539,6 +1551,19 @@ function normalizeServerRawTransaction(raw, idx) {
 }
 
 async function buildCtvViewPayload(ctv, reqOrigin) {
+  // Nạp settings mới nhất từ Supabase để đảm bảo ctvLinkConfig, policy và accessKey luôn được đồng bộ
+  try {
+    const freshSettings = await getSettingsFromSupabase();
+    if (freshSettings) {
+      if (freshSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...freshSettings.ctvLinkConfig };
+      if (freshSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...freshSettings.policy };
+      if (freshSettings.accessKey && !bridgeRuntimeKey) bridgeRuntimeKey = freshSettings.accessKey;
+      if (freshSettings.ctvShortLinks) bridgeState.ctvShortLinks = { ...bridgeState.ctvShortLinks, ...freshSettings.ctvShortLinks };
+    }
+  } catch (_settingsErr) {
+    // Bỏ qua nếu không lấy được, dùng state hiện tại
+  }
+
   const policy = bridgeState.policy || {};
   const ctvField = normalizeCtvFieldServer(policy.ctvField);
   const defaultRisk = normalizeRiskTier(policy.defaultRisk) || "high";
@@ -1579,7 +1604,9 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
 
   for (const lead of sourceLeads) {
     const subs = lead && lead.subs ? lead.subs : {};
-    if (String(subs[ctvField] || "").trim() !== ctv.ref) continue;
+    const subVal = String(subs[ctvField] || "").trim().toLowerCase();
+    const ctvRefLower = String(ctv.ref || "").trim().toLowerCase();
+    if (subVal !== ctvRefLower) continue;
 
     const status = mapViewOrderStatus(lead.statusKey);
     const campUpper = String(lead.campaignName || "").toUpperCase();
@@ -1632,7 +1659,7 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
     last_click_at: clickInfo.lastClickAt,
     totals,
     orders,
-    short_link: findSalesLinkForCtv(ctv, reqOrigin) || (resolveRequestOrigin(req) + "/l/" + encodeURIComponent(ctv.ref)),
+    short_link: findSalesLinkForCtv(ctv, reqOrigin) || (reqOrigin ? reqOrigin + "/l/" + encodeURIComponent(ctv.ref) : ""),
     project: {
       name: projectName,
       note: DEFAULT_PROJECT_NOTE
@@ -1679,14 +1706,18 @@ const server = http.createServer(async (req, res) => {
 
   if ((reqMethod === "GET" || reqMethod === "HEAD") && pathname.startsWith("/l/")) {
     const rawRef = decodeURIComponent(pathname.slice(3)).replace(/\/+$/, "").trim();
-    if (!/^[a-z0-9]{4,20}$/i.test(rawRef)) {
+    if (!/^[a-z0-9_]{3,40}$/i.test(rawRef)) {
       res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end("<!doctype html><html lang='vi'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Link không hợp lệ</title><body style='font-family:system-ui,sans-serif;padding:24px;max-width:480px;margin:0 auto'><h1>Link không hợp lệ</h1><p>Đường dẫn giới thiệu này không đúng định dạng hoặc đã hết hạn.</p></body></html>");
       return;
     }
 
+    const rawRefLower = rawRef.toLowerCase();
     let matchedCtv = bridgeState.ctvList.find(
-      (c) => c && c.active !== false && String(c.ref || "").toLowerCase() === rawRef.toLowerCase()
+      (c) => c && c.active !== false && (
+        String(c.ref || "").toLowerCase() === rawRefLower ||
+        String(c.view || "").toLowerCase() === rawRefLower
+      )
     );
     if (!matchedCtv) {
       const dbCtv = await getCtvByRefFromSupabase(rawRef);
@@ -1696,13 +1727,38 @@ const server = http.createServer(async (req, res) => {
       }
     }
     if (!matchedCtv) {
+      const dbCtvByView = await getCtvByViewCodeFromSupabase(rawRef);
+      if (dbCtvByView && dbCtvByView.active) {
+        matchedCtv = dbCtvByView;
+        bridgeState.ctvList.push(dbCtvByView);
+      }
+    }
+    if (!matchedCtv) {
+      // Thử nạp danh sách CTV từ app_settings trên Supabase nếu Vercel vừa khởi động lại
+      const dbSettingsForCtv = await getSettingsFromSupabase();
+      if (dbSettingsForCtv && Array.isArray(dbSettingsForCtv.ctvList)) {
+        for (const sc of dbSettingsForCtv.ctvList) {
+          if (!sc) continue;
+          if (String(sc.ref || "").toLowerCase() === rawRefLower || String(sc.view || "").toLowerCase() === rawRefLower) {
+            matchedCtv = sc;
+          }
+          const exIdx = bridgeState.ctvList.findIndex((c) => c && c.ref === sc.ref);
+          if (exIdx >= 0) {
+            bridgeState.ctvList[exIdx] = { ...bridgeState.ctvList[exIdx], ...sc };
+          } else {
+            bridgeState.ctvList.push(sc);
+          }
+        }
+      }
+    }
+    if (!matchedCtv) {
       res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end("<!doctype html><html lang='vi'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Link tạm ngừng</title><body style='font-family:system-ui,sans-serif;padding:24px;max-width:480px;margin:0 auto'><h1>Link bán hàng chưa sẵn sàng</h1><p>Mã cộng tác viên này chưa được đồng bộ hoặc đã ngừng hoạt động. Vui lòng liên hệ người quản lý.</p></body></html>");
       return;
     }
 
     const field = normalizeCtvFieldServer(bridgeState.policy && bridgeState.policy.ctvField);
-    const destUrl = buildFallbackFullSalesLink(bridgeState.ctvLinkConfig || {}, matchedCtv.ref, field);
+    let destUrl = buildFallbackFullSalesLink(bridgeState.ctvLinkConfig || {}, matchedCtv.ref, field);
     let destObj = null;
     try {
       destObj = destUrl ? new URL(destUrl) : null;
@@ -1710,9 +1766,26 @@ const server = http.createServer(async (req, res) => {
       destObj = null;
     }
 
-    if (!destObj || destObj.protocol !== "https:" || !isAccessTradeTrackingHost(destObj.hostname)) {
-      res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-      res.end("<!doctype html><html lang='vi'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Chưa cấu hình link</title><body style='font-family:system-ui,sans-serif;padding:24px;max-width:480px;margin:0 auto'><h1>Chưa có link sản phẩm</h1><p>Quản trị viên chưa lưu cấu hình link AccessTrade hợp lệ cho chiến dịch này.</p></body></html>");
+    // Nếu chưa cấu hình link AccessTrade hợp lệ → load lại settings từ Supabase rồi thử lại
+    if (!destObj || destObj.protocol !== "https:" || !isAllowedOutboundSalesHost(destObj.hostname)) {
+      const dbSettingsForLink = await getSettingsFromSupabase();
+      if (dbSettingsForLink && dbSettingsForLink.ctvLinkConfig) {
+        bridgeState.ctvLinkConfig = { ...bridgeState.ctvLinkConfig, ...dbSettingsForLink.ctvLinkConfig };
+        if (dbSettingsForLink.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettingsForLink.policy };
+        const retryUrl = buildFallbackFullSalesLink(bridgeState.ctvLinkConfig, matchedCtv.ref,
+          normalizeCtvFieldServer(bridgeState.policy && bridgeState.policy.ctvField));
+        try {
+          const retryObj = retryUrl ? new URL(retryUrl) : null;
+          if (retryObj && retryObj.protocol === "https:" && isAllowedOutboundSalesHost(retryObj.hostname)) {
+            destObj = retryObj;
+          }
+        } catch (_e2) {}
+      }
+    }
+
+    if (!destObj || destObj.protocol !== "https:" || !isAllowedOutboundSalesHost(destObj.hostname)) {
+      res.writeHead(503, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end("<!doctype html><html lang='vi'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Chưa cấu hình link</title><body style='font-family:system-ui,sans-serif;padding:24px;max-width:480px;margin:0 auto'><h1>Liên kết chưa sẵn sàng</h1><p>Quản trị viên chưa cấu hình link chiến dịch AccessTrade. Vui lòng liên hệ người quản lý để được hỗ trợ.</p></body></html>");
       return;
     }
 
@@ -1898,18 +1971,16 @@ const server = http.createServer(async (req, res) => {
     };
     saveBridgeStateToDisk();
 
-    // Đồng bộ lên Supabase ngầm khi ở chế độ dữ liệu thật
-    if (bridgeState.mode === "real") {
-      saveCtvsToSupabase(cleanCtvList).catch(() => {});
-      saveSettingsToSupabase({
-        mode: bridgeState.mode,
-        policy: bridgeState.policy,
-        ctvLinkConfig: bridgeState.ctvLinkConfig,
-        ctvShortLinks: bridgeState.ctvShortLinks,
-        accessKey: bridgeState.accessKey,
-        ctvList: cleanCtvList
-      }).catch(() => {});
-    }
+    // Luôn đồng bộ danh sách CTV và cấu hình lên Supabase để duy trì qua các lần khởi động serverless
+    saveCtvsToSupabase(cleanCtvList).catch(() => {});
+    saveSettingsToSupabase({
+      mode: bridgeState.mode,
+      policy: bridgeState.policy,
+      ctvLinkConfig: bridgeState.ctvLinkConfig,
+      ctvShortLinks: bridgeState.ctvShortLinks,
+      accessKey: bridgeState.accessKey,
+      ctvList: cleanCtvList
+    }).catch(() => {});
 
     sendJson(res, 200, {
       ok: true,
@@ -1945,14 +2016,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const viewCode = decodeURIComponent(pathname.slice("/api/view/".length)).trim();
-    if (!/^[a-z0-9]{10,40}$/.test(viewCode)) {
+    const viewCode = decodeURIComponent(pathname.slice("/api/view/".length)).trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,64}$/i.test(viewCode)) {
       sendJson(res, 404, { error: "Link không hợp lệ." });
       return;
     }
 
     let matchedCtv = bridgeState.ctvList.find(
-      (c) => c && c.active && c.view && c.view === viewCode
+      (c) => c && c.active && (
+        (c.view && c.view.toLowerCase() === viewCode) ||
+        (c.ref && c.ref.toLowerCase() === viewCode)
+      )
     );
 
     // Đồng bộ policy, cấu hình badge toggle và danh sách CTV từ Supabase (nếu có)
@@ -1965,8 +2039,8 @@ const server = http.createServer(async (req, res) => {
       }
       if (Array.isArray(dbSettings.ctvList)) {
         for (const sc of dbSettings.ctvList) {
-          if (!sc || !sc.view) continue;
-          const exIdx = bridgeState.ctvList.findIndex((c) => c.ref === sc.ref);
+          if (!sc) continue;
+          const exIdx = bridgeState.ctvList.findIndex((c) => c && c.ref === sc.ref);
           if (exIdx >= 0) {
             bridgeState.ctvList[exIdx] = { ...bridgeState.ctvList[exIdx], ...sc };
           } else {
@@ -1979,20 +2053,37 @@ const server = http.createServer(async (req, res) => {
     // Nếu chưa tìm thấy trong RAM, kiểm tra lại sau khi đã nạp dbSettings
     if (!matchedCtv) {
       matchedCtv = bridgeState.ctvList.find(
-        (c) => c && c.active !== false && c.view && c.view === viewCode
+        (c) => c && c.active !== false && (
+          (c.view && c.view.toLowerCase() === viewCode) ||
+          (c.ref && c.ref.toLowerCase() === viewCode)
+        )
       );
     }
 
-    // Nếu vẫn chưa thấy, đọc tiếp từ bảng ctvs
+    // Nếu vẫn chưa thấy theo view, đọc tiếp từ bảng ctvs
     if (!matchedCtv) {
       const dbCtv = await getCtvByViewCodeFromSupabase(viewCode);
       if (dbCtv && dbCtv.active) {
         matchedCtv = dbCtv;
-        const existIdx = bridgeState.ctvList.findIndex((c) => c.ref === dbCtv.ref);
+        const existIdx = bridgeState.ctvList.findIndex((c) => c && c.ref === dbCtv.ref);
         if (existIdx >= 0) {
           bridgeState.ctvList[existIdx] = dbCtv;
         } else {
           bridgeState.ctvList.push(dbCtv);
+        }
+      }
+    }
+
+    // Nếu vẫn chưa thấy theo viewCode, thử tìm theo ref từ bảng ctvs
+    if (!matchedCtv) {
+      const dbCtvByRef = await getCtvByRefFromSupabase(viewCode);
+      if (dbCtvByRef && dbCtvByRef.active) {
+        matchedCtv = dbCtvByRef;
+        const existIdx = bridgeState.ctvList.findIndex((c) => c && c.ref === dbCtvByRef.ref);
+        if (existIdx >= 0) {
+          bridgeState.ctvList[existIdx] = dbCtvByRef;
+        } else {
+          bridgeState.ctvList.push(dbCtvByRef);
         }
       }
     }

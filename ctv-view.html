@@ -2081,9 +2081,15 @@
               renderCurrentView();
               return;
             }
+            if (resp.status === 404) {
+              state.loading = false;
+              state.errorKind = "invalid";
+              state.data = null;
+              renderCurrentView();
+              return;
+            }
             state.loading = false;
-            state.errorKind = "invalid";
-            state.data = null;
+            state.errorKind = "network";
             renderCurrentView();
             return;
           }
@@ -2185,7 +2191,7 @@
             var proto = window.location && window.location.protocol;
             var isHttp = proto === "http:" || proto === "https:";
             var origin = isHttp ? window.location.origin : "";
-            var refCode = (state.data && state.data.ref) || state.viewCode || "";
+            var refCode = (state.data && state.data.ref) || "";
             var urlToCopy = (state.data && state.data.shortLink) || (origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) : "");
 
             if (!urlToCopy) {
