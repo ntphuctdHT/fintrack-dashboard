@@ -2924,6 +2924,12 @@
                     </button>
                   </div>
                 </details>
+                <div class="project-save-action-row" style="margin-top:var(--space-3);display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;">
+                  <button type="button" class="primary-btn" id="btn-save-project-vietcredit" style="min-width:200px;padding:10px 16px;">
+                    💾 Lưu cấu hình VietCredit
+                  </button>
+                  <span class="project-save-tip" id="save-tip-vietcredit" style="font-size:var(--text-xs);font-weight:600;color:var(--color-success);" hidden></span>
+                </div>
               </div>
 
               <!-- DỰ ÁN 2: TNEX -->
@@ -2968,6 +2974,12 @@
                     </div>
                   </div>
                 </details>
+                <div class="project-save-action-row" style="margin-top:var(--space-3);display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;">
+                  <button type="button" class="primary-btn" id="btn-save-project-tnex" style="min-width:200px;padding:10px 16px;">
+                    💾 Lưu cấu hình TNEX
+                  </button>
+                  <span class="project-save-tip" id="save-tip-tnex" style="font-size:var(--text-xs);font-weight:600;color:var(--color-success);" hidden></span>
+                </div>
               </div>
             </div>
 
@@ -4444,22 +4456,31 @@
         if (!cfg || typeof cfg !== "object") return null;
         var projects = cfg.projects && typeof cfg.projects === "object" ? cfg.projects : {};
         var pKey = String(projectKey || "").trim().toLowerCase();
-        if (pKey && projects[pKey] && typeof projects[pKey] === "object") {
-          return projects[pKey];
+        if (pKey) {
+          return projects[pKey] && typeof projects[pKey] === "object" ? projects[pKey] : null;
         }
         var defKey = String(cfg.defaultProject || "vietcredit").trim().toLowerCase();
         if (projects[defKey] && typeof projects[defKey] === "object") {
           return projects[defKey];
         }
-        return null;
+        return projects["vietcredit"] || null;
       }
 
       function buildCtvSalesLink(cfg, ref, subField, projectKey) {
-        var pCfg = getProjectConfigClient(cfg, projectKey);
-        var effectiveCfg = pCfg || cfg || {};
+        var pKey = String(projectKey || "").trim().toLowerCase();
+        var pCfg = getProjectConfigClient(cfg, pKey);
+        // Tách bạch tuyệt đối: nếu yêu cầu dự án cụ thể (như tnex) thì chỉ dùng pCfg, KHÔNG fallback sang VietCredit
+        var effectiveCfg;
+        if (pKey && pKey !== "vietcredit") {
+          effectiveCfg = pCfg;
+        } else {
+          effectiveCfg = pCfg || cfg || {};
+        }
+        if (!effectiveCfg) return "";
+
         var refCode = String(ref || "").trim();
         var field = normalizeCtvField(subField || "sub2");
-        var baseSalesLink = effectiveCfg && typeof effectiveCfg.baseSalesLink === "string" ? effectiveCfg.baseSalesLink.trim() : (cfg && typeof cfg.baseSalesLink === "string" ? cfg.baseSalesLink.trim() : "");
+        var baseSalesLink = effectiveCfg && typeof effectiveCfg.baseSalesLink === "string" ? effectiveCfg.baseSalesLink.trim() : "";
         if (baseSalesLink && isValidHttpUrl(baseSalesLink)) {
           var parsed = new URL(baseSalesLink);
           if (field !== "sub2") {
@@ -4469,21 +4490,31 @@
           return parsed.toString();
         }
 
-        var pub = encodeURIComponent(String((effectiveCfg && effectiveCfg.publisher) || (cfg && cfg.publisher) || "").trim());
-        var camp = encodeURIComponent(String((effectiveCfg && effectiveCfg.campaign) || (cfg && cfg.campaign) || "").trim());
-        var target = encodeURIComponent(String((effectiveCfg && effectiveCfg.targetUrl) || (cfg && cfg.targetUrl) || "").trim());
-        return (
-          "https://go.isclix.com/deep_link/" +
-          pub +
-          "/" +
-          camp +
-          "?url=" +
-          target +
-          "&" +
-          encodeURIComponent(field) +
-          "=" +
-          encodeURIComponent(refCode)
-        );
+        var pub = String(effectiveCfg.publisher || "").trim();
+        var camp = String(effectiveCfg.campaign || "").trim();
+        var target = String(effectiveCfg.targetUrl || "").trim();
+        if (/^\d{4,30}$/.test(pub) && /^\d{4,30}$/.test(camp) && target) {
+          try {
+            var targetCheck = new URL(target);
+            if (targetCheck.protocol === "https:" || targetCheck.protocol === "http:") {
+              return (
+                "https://go.isclix.com/deep_link/" +
+                encodeURIComponent(pub) +
+                "/" +
+                encodeURIComponent(camp) +
+                "?url=" +
+                encodeURIComponent(target) +
+                "&" +
+                encodeURIComponent(field) +
+                "=" +
+                encodeURIComponent(refCode)
+              );
+            }
+          } catch (_e) {
+            return "";
+          }
+        }
+        return "";
       }
 
       function buildCtvTrackedBridgeLink(cfg, ref, projectKey) {
@@ -4497,6 +4528,11 @@
         var base = cleanBase || rawFallback;
         if (!base) return "";
         var pKey = String(projectKey || "").trim().toLowerCase();
+        // Kiểm tra xem dự án này đã có link hợp lệ chưa, nếu chưa cấu hình thì không sinh link tracking rỗng
+        var fullTarget = buildCtvSalesLink(cfg, refCode, "sub2", pKey);
+        if (pKey && pKey !== "vietcredit" && !fullTarget) {
+          return "";
+        }
         var suffix = pKey && pKey !== "vietcredit" ? "/" + encodeURIComponent(pKey) : "";
         return base + "/l/" + encodeURIComponent(refCode) + suffix;
       }
@@ -6601,6 +6637,8 @@
         var salesModeEl = document.getElementById("select-ctv-sales-link-mode");
         var trackClicksEl = document.getElementById("input-ctv-track-clicks");
 
+        var sampleLinkInput = document.getElementById("input-ctv-sample-link");
+        var tnexLinkInput = document.getElementById("input-project-tnex-link");
         var tnexPubEl = document.getElementById("input-project-tnex-publisher");
         var tnexCampEl = document.getElementById("input-project-tnex-campaign");
         var tnexTargetEl = document.getElementById("input-project-tnex-target-url");
@@ -6610,11 +6648,13 @@
         var vcCamp = campEl ? campEl.value.trim() : "";
         var vcTarget = targetEl ? targetEl.value.trim() : "";
         var vcBase = baseLinkEl ? baseLinkEl.value.trim() : "";
+        var vcSample = sampleLinkInput ? sampleLinkInput.value.trim() : "";
 
         var tnexPub = tnexPubEl ? tnexPubEl.value.trim() : "";
         var tnexCamp = tnexCampEl ? tnexCampEl.value.trim() : "";
         var tnexTarget = tnexTargetEl ? tnexTargetEl.value.trim() : "";
         var tnexBase = tnexBaseLinkEl ? tnexBaseLinkEl.value.trim() : "";
+        var tnexSample = tnexLinkInput ? tnexLinkInput.value.trim() : "";
 
         var existingProjects = (state.ctvLinkConfig && state.ctvLinkConfig.projects) || {};
         var projects = Object.assign({}, existingProjects, {
@@ -6627,6 +6667,7 @@
             campaign: vcCamp,
             targetUrl: vcTarget,
             baseSalesLink: vcBase,
+            sampleLink: vcSample || (existingProjects.vietcredit && existingProjects.vietcredit.sampleLink) || "",
             enabled: true
           },
           tnex: {
@@ -6638,6 +6679,7 @@
             campaign: tnexCamp,
             targetUrl: tnexTarget,
             baseSalesLink: tnexBase,
+            sampleLink: tnexSample || (existingProjects.tnex && existingProjects.tnex.sampleLink) || "",
             enabled: true
           }
         });
@@ -6745,10 +6787,19 @@
         var tnexTargetEl = document.getElementById("input-project-tnex-target-url");
         var tnexBaseLinkEl = document.getElementById("input-project-tnex-base-link");
         var tnexDetailsEl = document.getElementById("tnex-base-link-details");
+        var sampleLinkInput = document.getElementById("input-ctv-sample-link");
+        var tnexLinkInput = document.getElementById("input-project-tnex-link");
 
         var projects = (state.ctvLinkConfig && state.ctvLinkConfig.projects) || {};
         var vcProj = projects.vietcredit || {};
         var tnexProj = projects.tnex || {};
+
+        if (sampleLinkInput && document.activeElement !== sampleLinkInput && vcProj.sampleLink) {
+          sampleLinkInput.value = vcProj.sampleLink;
+        }
+        if (tnexLinkInput && document.activeElement !== tnexLinkInput && tnexProj.sampleLink) {
+          tnexLinkInput.value = tnexProj.sampleLink;
+        }
 
         if (pubEl && document.activeElement !== pubEl) {
           pubEl.value = vcProj.publisher || state.ctvLinkConfig.publisher || "";
@@ -7661,6 +7712,58 @@
             }
           });
         });
+
+        // Nút Lưu riêng cho dự án VietCredit
+        var saveVcBtn = document.getElementById("btn-save-project-vietcredit");
+        if (saveVcBtn) {
+          saveVcBtn.addEventListener("click", function () {
+            var nextCfg = readCtvLinkConfigFromInputs();
+            var vc = (nextCfg.projects && nextCfg.projects.vietcredit) || {};
+            var hasVal = Boolean(vc.baseSalesLink || (vc.publisher && vc.campaign && vc.targetUrl));
+            if (!hasVal) {
+              showToast("warning", "Vui lòng nhập link hoặc điền Mã publisher, Chiến dịch và Link đích cho VietCredit.");
+              return;
+            }
+            state.ctvLinkConfig = nextCfg;
+            saveCtvLinkConfigToStorage();
+            renderCtvLinkConfigInputs();
+            renderCtvListOnly();
+            syncCtvBridgeToServer();
+            var tip = document.getElementById("save-tip-vietcredit");
+            if (tip) {
+              tip.textContent = "✔ Đã lưu cấu hình VietCredit & đồng bộ!";
+              tip.hidden = false;
+              setTimeout(function () { tip.hidden = true; }, 3000);
+            }
+            showToast("success", "Đã lưu cấu hình dự án VietCredit thành công.");
+          });
+        }
+
+        // Nút Lưu riêng cho dự án TNEX
+        var saveTnexBtn = document.getElementById("btn-save-project-tnex");
+        if (saveTnexBtn) {
+          saveTnexBtn.addEventListener("click", function () {
+            var nextCfg = readCtvLinkConfigFromInputs();
+            var tnex = (nextCfg.projects && nextCfg.projects.tnex) || {};
+            var hasVal = Boolean(tnex.baseSalesLink || (tnex.publisher && tnex.campaign && tnex.targetUrl));
+            if (!hasVal) {
+              showToast("warning", "Vui lòng nhập link hoặc điền Mã publisher, Chiến dịch và Link đích cho TNEX.");
+              return;
+            }
+            state.ctvLinkConfig = nextCfg;
+            saveCtvLinkConfigToStorage();
+            renderCtvLinkConfigInputs();
+            renderCtvListOnly();
+            syncCtvBridgeToServer();
+            var tip = document.getElementById("save-tip-tnex");
+            if (tip) {
+              tip.textContent = "✔ Đã lưu cấu hình TNEX & đồng bộ!";
+              tip.hidden = false;
+              setTimeout(function () { tip.hidden = true; }, 3000);
+            }
+            showToast("success", "Đã lưu cấu hình dự án TNEX thành công.");
+          });
+        }
 
         var clearBaseLinkBtn = document.getElementById("btn-clear-ctv-base-link");
         if (clearBaseLinkBtn) {

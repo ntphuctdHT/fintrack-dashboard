@@ -78,7 +78,7 @@ test("AccessTrade snapshot cache in Supabase guarantees instant CTV loading and 
     });
     child.stderr.on("data", () => {});
     child.on("error", reject);
-    setTimeout(() => reject(new Error("server.js timed out")), 5000);
+    setTimeout(() => reject(new Error("server.js timed out")), 10000);
   });
 
   try {

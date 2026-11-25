@@ -2205,13 +2205,19 @@
             var origin = isHttp ? window.location.origin : "";
             var refCode = (state.data && state.data.ref) || "";
             var pLink = (state.data && state.data.projectLinks && state.data.projectLinks[pkey]) || "";
-            var fallbackProjectTracked = origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) + (pkey !== "vietcredit" ? "/" + encodeURIComponent(pkey) : "") : "";
-            var urlToCopy = pLink || fallbackProjectTracked || (state.data && state.data.shortLink) || (origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) : "");
+
+            var urlToCopy = "";
+            if (pkey === "vietcredit") {
+              urlToCopy = pLink || (origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) : "") || (state.data && state.data.shortLink) || "";
+            } else {
+              // Tách bạch: dự án TNEX chỉ dùng link TNEX, không fallback sang VietCredit
+              urlToCopy = pLink || (origin && refCode ? origin + "/l/" + encodeURIComponent(refCode) + "/" + encodeURIComponent(pkey) : "");
+            }
 
             if (!urlToCopy) {
               if (tip) {
                 tip.hidden = false;
-                tip.textContent = "Chưa có link bán hàng";
+                tip.textContent = "Chưa mở dự án này";
                 setTimeout(function () { tip.hidden = true; }, 2500);
               }
               return;
@@ -2243,7 +2249,8 @@
 
             if (tip) {
               tip.hidden = false;
-              tip.textContent = copied ? "Đã copy link!" : "Chưa thể copy";
+              var pLabel = pkey === "tnex" ? "TNEX" : "VietCredit";
+              tip.textContent = copied ? "Đã copy link " + pLabel + "!" : "Chưa thể copy";
               setTimeout(function () { tip.hidden = true; }, 2000);
             }
           });

@@ -154,6 +154,7 @@ function sanitizeProjectsMap(raw) {
       tag: String(item.tag || "").slice(0, 40),
       desc: String(item.desc || "").slice(0, 200),
       baseSalesLink: typeof item.baseSalesLink === "string" ? item.baseSalesLink.trim() : "",
+      sampleLink: typeof item.sampleLink === "string" ? item.sampleLink.trim() : "",
       publisher: typeof item.publisher === "string" ? item.publisher.trim() : "",
       campaign: typeof item.campaign === "string" ? item.campaign.trim() : "",
       targetUrl: typeof item.targetUrl === "string" ? item.targetUrl.trim() : "",
@@ -1487,24 +1488,30 @@ function getProjectConfig(cfg, projectKey) {
   if (!cfg || typeof cfg !== "object") return null;
   const projects = cfg.projects && typeof cfg.projects === "object" ? cfg.projects : {};
   const pKey = String(projectKey || "").trim().toLowerCase();
-  if (pKey && projects[pKey] && typeof projects[pKey] === "object") {
-    return projects[pKey];
+  if (pKey) {
+    return projects[pKey] && typeof projects[pKey] === "object" ? projects[pKey] : null;
   }
   const defKey = String(cfg.defaultProject || "vietcredit").trim().toLowerCase();
   if (projects[defKey] && typeof projects[defKey] === "object") {
     return projects[defKey];
   }
-  for (const k of Object.keys(projects)) {
-    if (projects[k] && projects[k].enabled !== false) return projects[k];
-  }
-  return null;
+  return projects["vietcredit"] || null;
 }
 
 function buildFallbackFullSalesLink(cfg, ref, ctvField, projectKey) {
-  const pCfg = getProjectConfig(cfg, projectKey);
-  const effectiveCfg = pCfg || cfg || {};
+  const pKey = String(projectKey || "").trim().toLowerCase();
+  const pCfg = getProjectConfig(cfg, pKey);
+  // Nếu yêu cầu dự án cụ thể (như tnex) thì chỉ dùng pCfg, tuyệt đối KHÔNG fallback sang VietCredit
+  let effectiveCfg;
+  if (pKey && pKey !== "vietcredit") {
+    effectiveCfg = pCfg;
+  } else {
+    effectiveCfg = pCfg || cfg || {};
+  }
+  if (!effectiveCfg) return "";
+
   const field = normalizeCtvFieldServer(ctvField);
-  const baseSalesLink = effectiveCfg.baseSalesLink || cfg.baseSalesLink || "";
+  const baseSalesLink = typeof effectiveCfg.baseSalesLink === "string" ? effectiveCfg.baseSalesLink.trim() : "";
   if (baseSalesLink) {
     try {
       const u = new URL(baseSalesLink);
@@ -1517,9 +1524,9 @@ function buildFallbackFullSalesLink(cfg, ref, ctvField, projectKey) {
       return "";
     }
   }
-  const pub = effectiveCfg.publisher || cfg.publisher || "";
-  const camp = effectiveCfg.campaign || cfg.campaign || "";
-  const target = effectiveCfg.targetUrl || cfg.targetUrl || "";
+  const pub = typeof effectiveCfg.publisher === "string" ? effectiveCfg.publisher.trim() : "";
+  const camp = typeof effectiveCfg.campaign === "string" ? effectiveCfg.campaign.trim() : "";
+  const target = typeof effectiveCfg.targetUrl === "string" ? effectiveCfg.targetUrl.trim() : "";
   if (/^\d{4,30}$/.test(pub) && /^\d{4,30}$/.test(camp) && target) {
     try {
       const targetCheck = new URL(target);
@@ -1550,6 +1557,11 @@ function findSalesLinkForCtv(ctv, reqOrigin, projectKey) {
   const fullUrl = buildFallbackFullSalesLink(cfg, ctv.ref, field, projectKey);
 
   const pKey = String(projectKey || "").trim().toLowerCase();
+  // Nếu dự án yêu cầu chưa được cấu hình hợp lệ thì trả về rỗng, không sinh link lỗi
+  if (pKey && pKey !== "vietcredit" && !fullUrl) {
+    return "";
+  }
+
   const trackedBase = getTrackedBaseUrl(cfg, reqOrigin);
   const projectPathSuffix = pKey && pKey !== "vietcredit" ? "/" + encodeURIComponent(pKey) : "";
   const trackedUrl = trackedBase ? trackedBase.replace(/\/+$/, "") + "/l/" + encodeURIComponent(ctv.ref) + projectPathSuffix : "";
