@@ -1556,19 +1556,32 @@
     .app-toast {
       position: fixed;
       left: 50%;
-      bottom: calc(var(--tab-min) + env(safe-area-inset-bottom) + var(--space-3));
+      top: calc(env(safe-area-inset-top, 0px) + var(--space-4));
       transform: translateX(-50%);
       width: calc(100% - var(--space-8));
-      max-width: 480px;
-      z-index: 50;
+      max-width: 520px;
+      z-index: 9999;
       padding: var(--space-3) var(--space-4);
       border-radius: var(--radius-md);
-      border: 1px solid var(--color-border-strong);
+      border: 2px solid var(--color-border-strong);
       background-color: var(--color-surface);
       color: var(--color-text);
       font-size: var(--text-sm);
-      font-weight: 600;
-      box-shadow: 0 4px 16px var(--color-shadow);
+      font-weight: 700;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+      word-break: break-word;
+      animation: app-toast-pop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes app-toast-pop {
+      from {
+        opacity: 0;
+        transform: translate(-50%, -12px) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+      }
     }
 
     .app-toast-success {
@@ -1587,6 +1600,37 @@
       background-color: var(--color-warning-soft);
       border-color: var(--color-warning-border);
       color: var(--color-warning-text);
+    }
+
+    .btn-copied-flash {
+      background-color: var(--color-success-soft) !important;
+      border-color: var(--color-success) !important;
+      color: var(--color-success-text) !important;
+      font-weight: 700 !important;
+    }
+
+    .ctv-manual-copy-box {
+      margin-top: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--color-warning-border);
+      background-color: var(--color-warning-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .ctv-manual-copy-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .ctv-manual-copy-row .text-input {
+      flex: 1;
+      min-height: 36px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--text-xs);
     }
 
     .confirm-dialog {
@@ -3366,6 +3410,7 @@
         syncPollTimerId: null,
         syncAutoStatusText: "",
         autoSyncInitialDone: false,
+        manualCopyItem: null,
         leads: []
       };
 
@@ -3378,24 +3423,6 @@
           .replace(/>/g, "&gt;")
           .replace(/"/g, "&quot;")
           .replace(/'/g, "&#39;");
-      }
-
-      function showToast(message, type) {
-        if (typeof document === "undefined") return;
-        var container = document.getElementById("toast-container");
-        if (!container) return;
-        var toast = document.createElement("div");
-        var toastType = type === "success" || type === "warning" ? type : "info";
-        toast.className = "toast toast-" + toastType;
-        toast.textContent = message;
-        container.appendChild(toast);
-        setTimeout(function () {
-          toast.style.opacity = "0";
-          toast.style.transform = "translateY(8px)";
-          setTimeout(function () {
-            if (toast.parentNode) toast.parentNode.removeChild(toast);
-          }, 250);
-        }, 3000);
       }
 
       function getInitials(name) {
@@ -6995,6 +7022,7 @@
           toastEl.className = "app-toast";
           return;
         }
+        var prefix = kind === "success" ? "✅ " : kind === "error" ? "❌ " : "⚠️ ";
         toastEl.className =
           "app-toast " +
           (kind === "success"
@@ -7002,12 +7030,33 @@
             : kind === "error"
               ? "app-toast-error"
               : "app-toast-warning");
-        toastEl.textContent = message;
+        toastEl.textContent = prefix + message;
         toastEl.hidden = false;
         toastTimerId = window.setTimeout(function () {
           toastEl.hidden = true;
           toastTimerId = null;
-        }, 3500);
+        }, 4200);
+      }
+
+      function flashCopyButton(ctvId, action, projectKey) {
+        if (typeof document === "undefined") return;
+        var listRoot = document.getElementById("ctv-list-container");
+        if (!listRoot) return;
+        var selector =
+          'button[data-ctv-id="' + ctvId + '"][data-ctv-action="' + action + '"]' +
+          (projectKey ? '[data-project-key="' + projectKey + '"]' : "");
+        var targetBtn = listRoot.querySelector(selector);
+        if (!targetBtn) return;
+        var origText = targetBtn.getAttribute("data-orig-label") || targetBtn.textContent;
+        targetBtn.setAttribute("data-orig-label", origText);
+        targetBtn.classList.add("btn-copied-flash");
+        targetBtn.textContent = "✅ Đã sao chép!";
+        window.setTimeout(function () {
+          if (targetBtn && targetBtn.isConnected) {
+            targetBtn.classList.remove("btn-copied-flash");
+            targetBtn.textContent = origText;
+          }
+        }, 2200);
       }
 
       function openConfirmDialog(title, message) {
@@ -7052,6 +7101,7 @@
       }
 
       async function copyTextToClipboard(text) {
+        if (!text) return false;
         if (
           typeof navigator !== "undefined" &&
           navigator.clipboard &&
@@ -7059,7 +7109,6 @@
         ) {
           try {
             await navigator.clipboard.writeText(text);
-            showToast("Đã sao chép vào bộ nhớ tạm!", "success");
             return true;
           } catch (_clipErr) {
             // Fallback execCommand bên dưới
@@ -7070,14 +7119,15 @@
           ta.value = text;
           ta.setAttribute("readonly", "");
           ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          ta.style.top = "0";
           ta.style.opacity = "0";
           document.body.appendChild(ta);
+          ta.focus();
           ta.select();
+          ta.setSelectionRange(0, text.length);
           var ok = document.execCommand("copy");
           document.body.removeChild(ta);
-          if (ok) {
-            showToast("Đã sao chép vào bộ nhớ tạm!", "success");
-          }
           return Boolean(ok);
         } catch (_fallbackErr) {
           return false;
@@ -7411,12 +7461,6 @@
             "</button>";
 
           if (isExpanded) {
-            var cachedShort = cfgValid && isShortMode
-              ? getCachedCtvShortEntry(state.ctvLinkConfig, ctv.ref, state.ctvShortLinks, subFieldName)
-              : null;
-            var effectiveSalesLink = cfgValid
-              ? getEffectiveCtvSalesLink(state.ctvLinkConfig, ctv.ref, state.ctvShortLinks, subFieldName)
-              : "";
             var isShorteningThis = state.shorteningCtvId === ctv.id;
             var effectiveViewBase = getEffectiveViewBaseUrl(state.ctvLinkConfig);
             var ctvViewLink =
@@ -7463,49 +7507,58 @@
               }
             }
 
-            if (cfgValid) {
-              var previewProjects = [
-                { key: "vietcredit", label: "VietCredit" },
-                { key: "tnex", label: "TNEX (MSB)" }
-              ];
-              for (var pp = 0; pp < previewProjects.length; pp++) {
-                var pMeta = previewProjects[pp];
-                var pRawBase = getOutboundTrackingBaseLink(state.ctvLinkConfig, ctv.ref, subFieldName, pMeta.key);
-                if (!pRawBase) continue;
-                var pCachedShort = isShortMode
-                  ? getCachedCtvShortEntry(state.ctvLinkConfig, ctv.ref, state.ctvShortLinks, subFieldName, pMeta.key)
-                  : null;
-                if (isShortMode && pCachedShort) {
-                  html +=
-                    '<div class="ctv-code-row"><span>Link bán hàng ' + escapeHtml(pMeta.label) + ' rút gọn:</span></div>' +
-                    '<div class="ctv-short-sales-box">' +
-                    '<span class="ctv-code-mono ctv-short-sales-url">' + escapeHtml(pCachedShort.shortUrl) + '</span>' +
-                    '<button type="button" class="btn-copy-mini" data-ctv-action="copy-project-sales" data-project-key="' + escapeHtml(pMeta.key) + '" data-ctv-id="' + escapeHtml(ctv.id) + '" title="Sao chép link rút gọn ' + escapeHtml(pMeta.label) + '">📋</button>' +
-                    '</div>' +
-                    '<p class="field-hint">Nguồn: ' +
-                    escapeHtml(pCachedShort.providerLabel) +
-                    (isTrackActive ? " · Đếm lượt nhấp qua /l/" + escapeHtml(ctv.ref) + (pMeta.key !== "vietcredit" ? "/" + escapeHtml(pMeta.key) : "") + " → " : " · Giữ nguyên ") +
-                    escapeHtml(subFieldName) +
-                    "=" +
-                    escapeHtml(ctv.ref) +
-                    "</p>";
-                } else if (isTrackActive) {
-                  html +=
-                    '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + ' theo dõi nhấp thật:</span></div>' +
-                    '<p class="ctv-preview-url">' +
-                    escapeHtml(pRawBase) +
-                    "</p>";
-                } else if (isShortMode) {
-                  html +=
-                    '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + ':</span><span class="lead-fin-muted">Rút gọn tự động (tạo khi bấm sao chép)</span></div>';
-                } else {
-                  html +=
-                    '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + ' đầy đủ:</span></div>' +
-                    '<p class="ctv-preview-url">' +
-                    escapeHtml(pRawBase) +
-                    "</p>";
-                }
+            var previewProjects = [
+              { key: "vietcredit", label: "VietCredit" },
+              { key: "tnex", label: "TNEX (MSB)" }
+            ];
+            for (var pp = 0; pp < previewProjects.length; pp++) {
+              var pMeta = previewProjects[pp];
+              var pRawBase = getOutboundTrackingBaseLink(state.ctvLinkConfig, ctv.ref, subFieldName, pMeta.key);
+              if (!pRawBase) {
+                html +=
+                  '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + ':</span><span class="lead-fin-muted">Chưa cấu hình (vào mục Cấu hình link chiến dịch để lưu)</span></div>';
+                continue;
               }
+              var pCachedShort = isShortMode
+                ? getCachedCtvShortEntry(state.ctvLinkConfig, ctv.ref, state.ctvShortLinks, subFieldName, pMeta.key)
+                : null;
+              if (isShortMode && pCachedShort) {
+                html +=
+                  '<div class="ctv-code-row"><span>Link bán hàng ' + escapeHtml(pMeta.label) + ' rút gọn:</span></div>' +
+                  '<div class="ctv-short-sales-box">' +
+                  '<span class="ctv-code-mono ctv-short-sales-url">' + escapeHtml(pCachedShort.shortUrl) + '</span>' +
+                  '<button type="button" class="btn-copy-mini" data-ctv-action="copy-project-sales" data-project-key="' + escapeHtml(pMeta.key) + '" data-ctv-id="' + escapeHtml(ctv.id) + '" title="Sao chép link rút gọn ' + escapeHtml(pMeta.label) + '">📋</button>' +
+                  '</div>' +
+                  '<p class="field-hint">Nguồn: ' +
+                  escapeHtml(pCachedShort.providerLabel) +
+                  (isTrackActive ? " · Đếm lượt nhấp qua /l/" + escapeHtml(ctv.ref) + (pMeta.key !== "vietcredit" ? "/" + escapeHtml(pMeta.key) : "") + " → " : " · Giữ nguyên ") +
+                  escapeHtml(subFieldName) +
+                  "=" +
+                  escapeHtml(ctv.ref) +
+                  "</p>";
+              } else if (isShortMode) {
+                html +=
+                  '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + ' (sẵn sàng rút gọn):</span></div>' +
+                  '<p class="ctv-preview-url">' + escapeHtml(pRawBase) + '</p>' +
+                  '<p class="field-hint">Bấm nút <strong>Copy link ' + escapeHtml(pMeta.label) + '</strong> bên dưới để tạo link rút gọn có tên thương hiệu &amp; sao chép ngay.</p>';
+              } else {
+                html +=
+                  '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + (isTrackActive ? ' theo dõi nhấp thật' : ' đầy đủ') + ':</span></div>' +
+                  '<p class="ctv-preview-url">' +
+                  escapeHtml(pRawBase) +
+                  "</p>";
+              }
+            }
+
+            if (state.manualCopyItem && state.manualCopyItem.ctvId === ctv.id && state.manualCopyItem.url) {
+              html +=
+                '<div class="ctv-manual-copy-box">' +
+                '<span class="field-hint" style="margin:0;font-weight:700;">👇 Đã tạo link ' + escapeHtml(state.manualCopyItem.label || "") + ' — bấm "Chép ngay" hoặc Ctrl+C:</span>' +
+                '<div class="ctv-manual-copy-row">' +
+                '<input type="text" readonly class="text-input" data-manual-copy-input="' + escapeHtml(ctv.id) + '" value="' + escapeHtml(state.manualCopyItem.url) + '" />' +
+                '<button type="button" class="primary-btn" style="width:auto;min-height:36px;padding:6px 12px;" data-ctv-action="copy-manual-ready" data-ctv-id="' + escapeHtml(ctv.id) + '">📋 Chép ngay</button>' +
+                '</div>' +
+                '</div>';
             }
 
             html +=
@@ -8714,6 +8767,26 @@
               return;
             }
 
+            if (action === "copy-manual-ready") {
+              var manualText = (state.manualCopyItem && state.manualCopyItem.url) || "";
+              var manualInputEl = listContainer.querySelector('input[data-manual-copy-input="' + ctvId + '"]');
+              if (manualInputEl && manualInputEl.value) {
+                manualText = manualInputEl.value;
+                manualInputEl.focus();
+                manualInputEl.select();
+              }
+              var copiedManual = await copyTextToClipboard(manualText);
+              if (copiedManual) {
+                var manualLabel = (state.manualCopyItem && state.manualCopyItem.label) || "";
+                state.manualCopyItem = null;
+                renderCtvListOnly();
+                showToast("success", "Đã sao chép " + (manualLabel ? manualLabel + ": " : "") + manualText);
+              } else {
+                showToast("warning", "Hãy nhấn Ctrl+C (hoặc Giữ → Sao chép) trong ô link bên trên.");
+              }
+              return;
+            }
+
             if (
               action === "copy-sales" ||
               action === "copy-sales-short" ||
@@ -8721,11 +8794,27 @@
               action === "copy-message" ||
               action === "refresh-short"
             ) {
-              var cfgCheck = validateCtvLinkConfig(state.ctvLinkConfig);
-              if (!cfgCheck.ok) {
-                showCtvLinkConfigFeedback("error", cfgCheck.reason);
-                showToast("warning", "Cấu hình link chưa hợp lệ: " + cfgCheck.reason);
-                return;
+              var subFieldName = normalizeCtvField(state.ctvField);
+              if (action === "copy-project-sales") {
+                var targetProjKeyCheck = String(btn.getAttribute("data-project-key") || "vietcredit").trim().toLowerCase();
+                var targetProjNameCheck = targetProjKeyCheck === "tnex" ? "TNEX (MSB)" : "VietCredit";
+                var checkProjRaw = getOutboundTrackingBaseLink(state.ctvLinkConfig, targetCtv.ref, subFieldName, targetProjKeyCheck);
+                if (!checkProjRaw) {
+                  var projErrMsg = "Chưa cấu hình link cho dự án " + targetProjNameCheck + ". Hãy vào Cấu hình link chiến dịch và bấm Lưu cấu hình " + targetProjNameCheck + ".";
+                  showCtvLinkConfigFeedback("warning", projErrMsg);
+                  showToast("warning", projErrMsg);
+                  return;
+                }
+              } else {
+                var cfgCheck = validateCtvLinkConfig(state.ctvLinkConfig);
+                if (!cfgCheck.ok) {
+                  var hasTnexReady = Boolean(getOutboundTrackingBaseLink(state.ctvLinkConfig, targetCtv.ref, subFieldName, "tnex"));
+                  if (!hasTnexReady) {
+                    showCtvLinkConfigFeedback("error", cfgCheck.reason);
+                    showToast("warning", "Cấu hình link chưa hợp lệ: " + cfgCheck.reason);
+                    return;
+                  }
+                }
               }
               if (action === "copy-message" && (!targetCtv.active || !targetCtv.view)) {
                 showToast(
@@ -8735,16 +8824,17 @@
                 return;
               }
 
-              var subFieldName = normalizeCtvField(state.ctvField);
               var isTrackActive =
                 state.ctvLinkConfig.trackClicks === true &&
                 normalizeSalesLinkMode(state.ctvLinkConfig.salesLinkMode) !== "short_accesstrade";
               if (action === "copy-message" || isTrackActive) {
-                await syncCtvBridgeToServer();
+                syncCtvBridgeToServer().catch(function () {});
               }
 
               var isShortMode = isShortSalesLinkMode(state.ctvLinkConfig.salesLinkMode);
               var defaultProjectKey = String(state.ctvLinkConfig.defaultProject || "vietcredit").trim().toLowerCase();
+              var origBtnLabel = btn.getAttribute("data-orig-label") || btn.textContent;
+              btn.setAttribute("data-orig-label", origBtnLabel);
 
               async function ensureShortForProjectKey(projKey, forceRefresh) {
                 var baseUrlProj = getOutboundTrackingBaseLink(
@@ -8773,8 +8863,8 @@
                 if (isTrackActive && isLoopbackTracked && !forceRefresh) {
                   return { entry: null, newlyShortened: false, trackedFallback: true, configured: true };
                 }
-                state.shorteningCtvId = ctvId;
-                renderCtvListOnly();
+                btn.disabled = true;
+                btn.textContent = "⏳ Đang tạo link...";
                 try {
                   var created = await requestShortLinkFromServer(
                     state.ctvLinkConfig,
@@ -8784,13 +8874,36 @@
                   );
                   return { entry: created, newlyShortened: true, trackedFallback: false, configured: true };
                 } catch (shortErr) {
-                  if (isTrackActive && !forceRefresh) {
-                    return { entry: null, newlyShortened: false, trackedFallback: true, configured: true };
+                  if (!forceRefresh && baseUrlProj) {
+                    return { entry: null, newlyShortened: false, trackedFallback: true, configured: true, fallbackError: shortErr && shortErr.message };
                   }
                   throw shortErr;
                 } finally {
-                  state.shorteningCtvId = null;
+                  btn.disabled = false;
+                  btn.textContent = origBtnLabel;
+                }
+              }
+
+              async function copyAndAnnounce(textToCopy, successMsg, manualLabel, projectKeyForFlash) {
+                var copiedOk = await copyTextToClipboard(textToCopy);
+                if (copiedOk) {
+                  state.manualCopyItem = null;
                   renderCtvListOnly();
+                  flashCopyButton(ctvId, action, projectKeyForFlash);
+                  showToast("success", successMsg);
+                } else {
+                  state.manualCopyItem = {
+                    ctvId: targetCtv.id,
+                    label: manualLabel,
+                    url: textToCopy
+                  };
+                  renderCtvListOnly();
+                  var fallbackInput = listContainer.querySelector('input[data-manual-copy-input="' + ctvId + '"]');
+                  if (fallbackInput) {
+                    fallbackInput.focus();
+                    fallbackInput.select();
+                  }
+                  showToast("warning", "Đã tạo link " + manualLabel + "! Bấm nút 'Chép ngay' hoặc Ctrl+C ở ô hiện sẵn.");
                 }
               }
 
@@ -8806,13 +8919,16 @@
                   var pLink = (pShortRes.entry && pShortRes.entry.shortUrl)
                     ? pShortRes.entry.shortUrl
                     : getEffectiveCtvSalesLink(state.ctvLinkConfig, targetCtv.ref, state.ctvShortLinks, subFieldName, pKey);
-                  var copiedP = await copyTextToClipboard(pLink);
-                  showToast(
-                    copiedP ? "success" : "error",
-                    copiedP
-                      ? (pShortRes.newlyShortened ? "Đã rút gọn & sao chép link " : "Đã sao chép link bán hàng ") + pName + " của " + targetCtv.name + "."
-                      : "Không thể sao chép tự động, vui lòng thử lại."
-                  );
+                  if (!pLink) {
+                    showToast("error", "Không tạo được link cho dự án " + pName + ". Vui lòng kiểm tra lại cấu hình.");
+                    return;
+                  }
+                  var msgProj = pShortRes.newlyShortened
+                    ? "Đã rút gọn & sao chép link " + pName + ": " + pLink
+                    : pShortRes.trackedFallback
+                      ? "Đã sao chép link " + pName + " (dự phòng): " + pLink
+                      : "Đã sao chép link " + pName + ": " + pLink;
+                  await copyAndAnnounce(pLink, msgProj, pName, pKey);
                 } catch (pShortErr) {
                   showToast("error", (pShortErr && pShortErr.message) ? pShortErr.message : "Không thể rút gọn link " + pName + ".");
                 }
@@ -8847,6 +8963,7 @@
               }
 
               if (action === "refresh-short") {
+                renderCtvListOnly();
                 showToast(
                   "success",
                   "Đã tạo lại link rút gọn cho " + targetCtv.name + ": " + (existingShort ? existingShort.shortUrl : "")
@@ -8858,12 +8975,11 @@
                 var shortLinkToCopy = (existingShort && existingShort.shortUrl)
                   ? existingShort.shortUrl
                   : getEffectiveCtvSalesLink(state.ctvLinkConfig, targetCtv.ref, state.ctvShortLinks, subFieldName, defaultProjectKey);
-                var copiedShortSales = await copyTextToClipboard(shortLinkToCopy);
-                showToast(
-                  copiedShortSales ? "success" : "error",
-                  copiedShortSales
-                    ? "Đã sao chép link bán hàng rút gọn của " + targetCtv.name + "."
-                    : "Không thể sao chép tự động, vui lòng thử lại."
+                await copyAndAnnounce(
+                  shortLinkToCopy,
+                  "Đã sao chép link bán hàng rút gọn: " + shortLinkToCopy,
+                  "rút gọn",
+                  ""
                 );
                 return;
               }
@@ -8883,30 +8999,22 @@
                     state.ctvShortLinks,
                     subFieldName
                   );
-              var copied = await copyTextToClipboard(textToCopy);
-              if (copied) {
-                showToast(
-                  "success",
-                  action === "copy-sales"
-                    ? usedTrackedDirectFallback
-                      ? "Đã sao chép link theo dõi lượt nhấp (/l/...) cho " + targetCtv.name + "."
-                      : (newlyShortened ? "Đã rút gọn & sao chép link bán hàng của " : "Đã sao chép link bán hàng của ") +
+              var finalSuccessMsg =
+                action === "copy-sales"
+                  ? usedTrackedDirectFallback
+                    ? "Đã sao chép link theo dõi lượt nhấp: " + textToCopy
+                    : (newlyShortened ? "Đã rút gọn & sao chép link: " : "Đã sao chép link: ") + textToCopy
+                  : usedTrackedDirectFallback
+                    ? "Đã sao chép tin nhắn gửi " + targetCtv.name + "."
+                    : (newlyShortened ? "Đã rút gọn link & sao chép tin nhắn gửi " : "Đã sao chép tin nhắn gửi ") +
                       targetCtv.name +
-                      "."
-                    : usedTrackedDirectFallback
-                      ? "Đã sao chép tin nhắn (gồm link theo dõi /l/...) gửi " + targetCtv.name + "."
-                      : (newlyShortened ? "Đã rút gọn link & sao chép tin nhắn gửi " : "Đã sao chép tin nhắn gửi ") +
-                      targetCtv.name +
-                      "."
-                );
-              } else if (newlyShortened) {
-                showToast(
-                  "warning",
-                  "Đã tạo và hiển thị link rút gọn — bấm nút Sao chép một lần nữa để chép nhanh."
-                );
-              } else {
-                showToast("error", "Không thể tự động sao chép, vui lòng thử lại.");
-              }
+                      ".";
+              await copyAndAnnounce(
+                textToCopy,
+                finalSuccessMsg,
+                action === "copy-sales" ? "bán hàng" : "tin nhắn CTV",
+                ""
+              );
               return;
             }
 

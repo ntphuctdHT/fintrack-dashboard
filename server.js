@@ -1895,16 +1895,29 @@ async function createShortTrackingLink({
   }
 
   if (normalizedProvider === "isgd") {
-    const isgdRes = await shortenViaIsGd(fullUrlObj.toString(), effectiveProjectKey);
-    return {
-      short_url: isgdRes.short_url,
-      provider: isgdRes.provider,
-      provider_label: isgdRes.provider_label,
-      full_url: fullUrlObj.toString(),
-      sub_field: subField,
-      sub_value: subValue,
-      verified_tracking: true
-    };
+    try {
+      const isgdRes = await shortenViaIsGd(fullUrlObj.toString(), effectiveProjectKey);
+      return {
+        short_url: isgdRes.short_url,
+        provider: isgdRes.provider,
+        provider_label: isgdRes.provider_label,
+        full_url: fullUrlObj.toString(),
+        sub_field: subField,
+        sub_value: subValue,
+        verified_tracking: true
+      };
+    } catch (_isgdFallbackErr) {
+      const tinyFallback = await shortenViaTinyUrl(fullUrlObj.toString());
+      return {
+        short_url: tinyFallback.short_url,
+        provider: tinyFallback.provider,
+        provider_label: tinyFallback.provider_label,
+        full_url: fullUrlObj.toString(),
+        sub_field: subField,
+        sub_value: subValue,
+        verified_tracking: true
+      };
+    }
   }
 
   if (normalizedProvider === "tinyurl") {
