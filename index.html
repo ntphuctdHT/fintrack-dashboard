@@ -4746,8 +4746,8 @@
       }
 
       function buildCtvInviteMessage(ctv, cfg, shortLinksMap, subField) {
-        var vcLink = getEffectiveCtvSalesLink(cfg, ctv.ref, shortLinksMap, subField, "vietcredit");
-        var tnexLink = getEffectiveCtvSalesLink(cfg, ctv.ref, shortLinksMap, subField, "tnex");
+        var vcLink = getEffectiveCtvSalesLink(cfg, ctv.ref, shortLinksMap, subField, "vietcredit") || "(Chưa cấu hình)";
+        var tnexLink = getEffectiveCtvSalesLink(cfg, ctv.ref, shortLinksMap, subField, "tnex") || "(Chưa cấu hình)";
         var viewLink = buildCtvViewLink(cfg, ctv.view);
         return (
           "Chào " +
@@ -7464,40 +7464,47 @@
             }
 
             if (cfgValid) {
-              if (isShortMode && cachedShort) {
-                html +=
-                  '<div class="ctv-code-row"><span>Link bán hàng rút gọn:</span></div>' +
-                  '<div class="ctv-short-sales-box">' +
-                  '<span class="ctv-code-mono ctv-short-sales-url">' + escapeHtml(cachedShort.shortUrl) + '</span>' +
-                  '<button type="button" class="btn-copy-mini" data-ctv-action="copy-sales-short" data-ctv-id="' + escapeHtml(ctv.id) + '" title="Sao chép link rút gọn">📋</button>' +
-                  '</div>' +
-                  '<p class="field-hint">Nguồn: ' +
-                  escapeHtml(cachedShort.providerLabel) +
-                  (isTrackActive ? " · Đếm lượt nhấp qua /l/" + escapeHtml(ctv.ref) + " → " : " · Giữ nguyên ") +
-                  escapeHtml(subFieldName) +
-                  "=" +
-                  escapeHtml(ctv.ref) +
-                  "</p>";
-              } else if (isTrackActive) {
-                html +=
-                  '<div class="ctv-code-row"><span>Link bán hàng theo dõi nhấp thật:</span></div>' +
-                  '<p class="ctv-preview-url">' +
-                  escapeHtml(effectiveSalesLink) +
-                  "</p>" +
-                  '<p class="field-hint">Chuyển hướng sang AccessTrade (' +
-                  escapeHtml(subFieldName) +
-                  "=" +
-                  escapeHtml(ctv.ref) +
-                  ") và tự động tăng số lượt nhấp thật.</p>";
-              } else if (isShortMode) {
-                html +=
-                  '<div class="ctv-code-row"><span>Kiểu link bán hàng:</span><span class="lead-fin-muted">Rút gọn tự động (tạo khi bấm sao chép)</span></div>';
-              } else {
-                html +=
-                  '<div class="ctv-code-row"><span>Link bán hàng đầy đủ:</span></div>' +
-                  '<p class="ctv-preview-url">' +
-                  escapeHtml(effectiveSalesLink) +
-                  "</p>";
+              var previewProjects = [
+                { key: "vietcredit", label: "VietCredit" },
+                { key: "tnex", label: "TNEX (MSB)" }
+              ];
+              for (var pp = 0; pp < previewProjects.length; pp++) {
+                var pMeta = previewProjects[pp];
+                var pRawBase = getOutboundTrackingBaseLink(state.ctvLinkConfig, ctv.ref, subFieldName, pMeta.key);
+                if (!pRawBase) continue;
+                var pCachedShort = isShortMode
+                  ? getCachedCtvShortEntry(state.ctvLinkConfig, ctv.ref, state.ctvShortLinks, subFieldName, pMeta.key)
+                  : null;
+                if (isShortMode && pCachedShort) {
+                  html +=
+                    '<div class="ctv-code-row"><span>Link bán hàng ' + escapeHtml(pMeta.label) + ' rút gọn:</span></div>' +
+                    '<div class="ctv-short-sales-box">' +
+                    '<span class="ctv-code-mono ctv-short-sales-url">' + escapeHtml(pCachedShort.shortUrl) + '</span>' +
+                    '<button type="button" class="btn-copy-mini" data-ctv-action="copy-project-sales" data-project-key="' + escapeHtml(pMeta.key) + '" data-ctv-id="' + escapeHtml(ctv.id) + '" title="Sao chép link rút gọn ' + escapeHtml(pMeta.label) + '">📋</button>' +
+                    '</div>' +
+                    '<p class="field-hint">Nguồn: ' +
+                    escapeHtml(pCachedShort.providerLabel) +
+                    (isTrackActive ? " · Đếm lượt nhấp qua /l/" + escapeHtml(ctv.ref) + (pMeta.key !== "vietcredit" ? "/" + escapeHtml(pMeta.key) : "") + " → " : " · Giữ nguyên ") +
+                    escapeHtml(subFieldName) +
+                    "=" +
+                    escapeHtml(ctv.ref) +
+                    "</p>";
+                } else if (isTrackActive) {
+                  html +=
+                    '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + ' theo dõi nhấp thật:</span></div>' +
+                    '<p class="ctv-preview-url">' +
+                    escapeHtml(pRawBase) +
+                    "</p>";
+                } else if (isShortMode) {
+                  html +=
+                    '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + ':</span><span class="lead-fin-muted">Rút gọn tự động (tạo khi bấm sao chép)</span></div>';
+                } else {
+                  html +=
+                    '<div class="ctv-code-row"><span>Link ' + escapeHtml(pMeta.label) + ' đầy đủ:</span></div>' +
+                    '<p class="ctv-preview-url">' +
+                    escapeHtml(pRawBase) +
+                    "</p>";
+                }
               }
             }
 
@@ -8425,8 +8432,14 @@
           }
         }
 
-        async function requestShortLinkFromServer(cfg, ref, subField) {
-          var fullSalesLink = getOutboundTrackingBaseLink(cfg, ref, subField);
+        async function requestShortLinkFromServer(cfg, ref, subField, projectKey) {
+          var pKey = String(projectKey || (cfg && cfg.defaultProject) || "vietcredit").trim().toLowerCase();
+          var pCfg = getProjectConfigClient(cfg, pKey);
+          var effectiveCfg = (pKey && pKey !== "vietcredit") ? pCfg : (pCfg || cfg || {});
+          var fullSalesLink = getOutboundTrackingBaseLink(cfg, ref, subField, pKey);
+          if (!fullSalesLink) {
+            throw new Error("Chưa cấu hình link cho dự án " + (pKey === "tnex" ? "TNEX (MSB)" : "VietCredit") + ".");
+          }
           var endpoint = buildShortenLinkEndpoint(state.serverUrl);
           var headers = { "Content-Type": "application/json", Accept: "application/json" };
           if (state.accessKey) {
@@ -8438,10 +8451,11 @@
             body: JSON.stringify({
               full_url: fullSalesLink,
               provider: salesLinkModeToProvider(cfg.salesLinkMode),
-              campaign_id: cfg.campaign || "",
-              target_url: cfg.targetUrl || "",
+              campaign_id: (effectiveCfg && effectiveCfg.campaign) || "",
+              target_url: (effectiveCfg && effectiveCfg.targetUrl) || "",
               sub_field: subField,
-              sub_value: ref
+              sub_value: ref,
+              project_key: pKey
             })
           });
           var payload = null;
@@ -8497,7 +8511,7 @@
             testBtn.disabled = true;
             testBtn.textContent = "Đang rút gọn & kiểm tra...";
             try {
-              var shortened = await requestShortLinkFromServer(draftCfg, sampleRef, subFieldName);
+              var shortened = await requestShortLinkFromServer(draftCfg, sampleRef, subFieldName, draftCfg.defaultProject || "vietcredit");
               var resolveEp = buildResolveShortLinkEndpoint(state.serverUrl);
               var verifyResp = await window.fetch(resolveEp, {
                 method: "POST",
@@ -8703,6 +8717,7 @@
             if (
               action === "copy-sales" ||
               action === "copy-sales-short" ||
+              action === "copy-project-sales" ||
               action === "copy-message" ||
               action === "refresh-short"
             ) {
@@ -8729,87 +8744,112 @@
               }
 
               var isShortMode = isShortSalesLinkMode(state.ctvLinkConfig.salesLinkMode);
-              var existingShort = isShortMode
-                ? getCachedCtvShortEntry(
-                  state.ctvLinkConfig,
-                  targetCtv.ref,
-                  state.ctvShortLinks,
-                  subFieldName
-                )
-                : null;
+              var defaultProjectKey = String(state.ctvLinkConfig.defaultProject || "vietcredit").trim().toLowerCase();
 
-              var newlyShortened = false;
-              var usedTrackedDirectFallback = false;
-              if (isShortMode && (!existingShort || action === "refresh-short")) {
-                var outboundTarget = getOutboundTrackingBaseLink(
+              async function ensureShortForProjectKey(projKey, forceRefresh) {
+                var baseUrlProj = getOutboundTrackingBaseLink(
                   state.ctvLinkConfig,
                   targetCtv.ref,
-                  subFieldName
+                  subFieldName,
+                  projKey
                 );
+                if (!baseUrlProj) {
+                  return { entry: null, newlyShortened: false, trackedFallback: false, configured: false };
+                }
+                var cached = isShortMode
+                  ? getCachedCtvShortEntry(state.ctvLinkConfig, targetCtv.ref, state.ctvShortLinks, subFieldName, projKey)
+                  : null;
+                if (!isShortMode || (cached && !forceRefresh)) {
+                  return { entry: cached, newlyShortened: false, trackedFallback: false, configured: true };
+                }
                 var isLoopbackTracked = false;
                 try {
-                  var parsedOut = new URL(outboundTarget);
+                  var parsedOut = new URL(baseUrlProj);
                   isLoopbackTracked =
                     parsedOut.hostname === "localhost" || parsedOut.hostname === "127.0.0.1";
                 } catch (_eOut) {
                   isLoopbackTracked = false;
                 }
-
-                if (isTrackActive && isLoopbackTracked && action !== "refresh-short") {
-                  usedTrackedDirectFallback = true;
-                } else {
-                  state.shorteningCtvId = ctvId;
-                  renderCtvListOnly();
-                  try {
-                    existingShort = await requestShortLinkFromServer(
-                      state.ctvLinkConfig,
-                      targetCtv.ref,
-                      subFieldName
-                    );
-                    newlyShortened = true;
-                  } catch (shortErr) {
-                    state.shorteningCtvId = null;
-                    renderCtvListOnly();
-                    if (isTrackActive && action !== "refresh-short") {
-                      usedTrackedDirectFallback = true;
-                    } else {
-                      var shortErrMsg =
-                        shortErr && shortErr.message
-                          ? shortErr.message
-                          : "Không thể tạo link rút gọn cho CTV.";
-                      showToast("error", shortErrMsg);
-                      return;
-                    }
+                if (isTrackActive && isLoopbackTracked && !forceRefresh) {
+                  return { entry: null, newlyShortened: false, trackedFallback: true, configured: true };
+                }
+                state.shorteningCtvId = ctvId;
+                renderCtvListOnly();
+                try {
+                  var created = await requestShortLinkFromServer(
+                    state.ctvLinkConfig,
+                    targetCtv.ref,
+                    subFieldName,
+                    projKey
+                  );
+                  return { entry: created, newlyShortened: true, trackedFallback: false, configured: true };
+                } catch (shortErr) {
+                  if (isTrackActive && !forceRefresh) {
+                    return { entry: null, newlyShortened: false, trackedFallback: true, configured: true };
                   }
+                  throw shortErr;
+                } finally {
                   state.shorteningCtvId = null;
                   renderCtvListOnly();
                 }
               }
 
-              if (action === "refresh-short") {
-                showToast(
-                  "success",
-                  "Đã tạo lại link rút gọn cho " + targetCtv.name + ": " + existingShort.shortUrl
-                );
+              if (action === "copy-project-sales") {
+                var pKey = String(btn.getAttribute("data-project-key") || "vietcredit").trim().toLowerCase();
+                var pName = pKey === "tnex" ? "TNEX (MSB)" : "VietCredit";
+                try {
+                  var pShortRes = await ensureShortForProjectKey(pKey, false);
+                  if (!pShortRes.configured) {
+                    showToast("warning", "Chưa cấu hình link dự án " + pName + ".");
+                    return;
+                  }
+                  var pLink = (pShortRes.entry && pShortRes.entry.shortUrl)
+                    ? pShortRes.entry.shortUrl
+                    : getEffectiveCtvSalesLink(state.ctvLinkConfig, targetCtv.ref, state.ctvShortLinks, subFieldName, pKey);
+                  var copiedP = await copyTextToClipboard(pLink);
+                  showToast(
+                    copiedP ? "success" : "error",
+                    copiedP
+                      ? (pShortRes.newlyShortened ? "Đã rút gọn & sao chép link " : "Đã sao chép link bán hàng ") + pName + " của " + targetCtv.name + "."
+                      : "Không thể sao chép tự động, vui lòng thử lại."
+                  );
+                } catch (pShortErr) {
+                  showToast("error", (pShortErr && pShortErr.message) ? pShortErr.message : "Không thể rút gọn link " + pName + ".");
+                }
                 return;
               }
 
-              if (action === "copy-project-sales") {
-                var pKey = btn.getAttribute("data-project-key") || "vietcredit";
-                var pLink = getEffectiveCtvSalesLink(
-                  state.ctvLinkConfig,
-                  targetCtv.ref,
-                  state.ctvShortLinks,
-                  subFieldName,
-                  pKey
-                );
-                var pName = pKey === "tnex" ? "TNEX (MSB)" : "VietCredit";
-                var copiedP = await copyTextToClipboard(pLink);
+              var newlyShortened = false;
+              var usedTrackedDirectFallback = false;
+              var existingShort = null;
+
+              try {
+                if (action === "copy-message") {
+                  var projKeysToPrepare = ["vietcredit", "tnex"];
+                  for (var pkIdx = 0; pkIdx < projKeysToPrepare.length; pkIdx++) {
+                    var msgRes = await ensureShortForProjectKey(projKeysToPrepare[pkIdx], false);
+                    if (msgRes.newlyShortened) newlyShortened = true;
+                    if (msgRes.trackedFallback) usedTrackedDirectFallback = true;
+                  }
+                } else {
+                  var defRes = await ensureShortForProjectKey(defaultProjectKey, action === "refresh-short");
+                  existingShort = defRes.entry;
+                  newlyShortened = defRes.newlyShortened;
+                  usedTrackedDirectFallback = defRes.trackedFallback;
+                }
+              } catch (shortErr) {
+                var shortErrMsg =
+                  shortErr && shortErr.message
+                    ? shortErr.message
+                    : "Không thể tạo link rút gọn cho CTV.";
+                showToast("error", shortErrMsg);
+                return;
+              }
+
+              if (action === "refresh-short") {
                 showToast(
-                  copiedP ? "success" : "error",
-                  copiedP
-                    ? "Đã sao chép link bán hàng " + pName + " của " + targetCtv.name + "."
-                    : "Không thể sao chép tự động, vui lòng thử lại."
+                  "success",
+                  "Đã tạo lại link rút gọn cho " + targetCtv.name + ": " + (existingShort ? existingShort.shortUrl : "")
                 );
                 return;
               }
@@ -8817,7 +8857,7 @@
               if (action === "copy-sales-short") {
                 var shortLinkToCopy = (existingShort && existingShort.shortUrl)
                   ? existingShort.shortUrl
-                  : getEffectiveCtvSalesLink(state.ctvLinkConfig, targetCtv.ref, state.ctvShortLinks, subFieldName);
+                  : getEffectiveCtvSalesLink(state.ctvLinkConfig, targetCtv.ref, state.ctvShortLinks, subFieldName, defaultProjectKey);
                 var copiedShortSales = await copyTextToClipboard(shortLinkToCopy);
                 showToast(
                   copiedShortSales ? "success" : "error",
@@ -8834,7 +8874,8 @@
                     state.ctvLinkConfig,
                     targetCtv.ref,
                     state.ctvShortLinks,
-                    subFieldName
+                    subFieldName,
+                    defaultProjectKey
                   )
                   : buildCtvInviteMessage(
                     targetCtv,

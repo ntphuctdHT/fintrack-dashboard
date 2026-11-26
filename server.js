@@ -1599,8 +1599,26 @@ async function resolveAccessTradeShortLink(rawUrl, allowedOrigin) {
   throw hopErr;
 }
 
-async function shortenViaIsGd(fullUrl) {
-  const endpoint = ISGD_API_BASE + "/create.php?format=json&url=" + encodeURIComponent(fullUrl);
+function resolveBrandShortPrefix(projectKey) {
+  const raw = String(projectKey || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw === "tnex") return "Tnex";
+  if (raw === "vietcredit") return "VietCredit";
+  const cleaned = raw.replace(/[^a-z0-9]/gi, "");
+  if (!cleaned) return "";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1, 14);
+}
+
+function buildIsGdCustomAlias(projectKey) {
+  const prefix = resolveBrandShortPrefix(projectKey);
+  if (!prefix) return "";
+  const suffix = crypto.randomBytes(4).toString("base64url").replace(/[^A-Za-z0-9]/g, "").slice(0, 6);
+  const safeSuffix = suffix.length >= 4 ? suffix : crypto.randomBytes(3).toString("hex");
+  const combined = prefix + "_" + safeSuffix;
+  return combined.slice(0, 30);
+}
+
+async function requestIsGdCreate(endpoint) {
   let response;
   try {
     response = await fetch(endpoint, {
@@ -1615,6 +1633,7 @@ async function shortenViaIsGd(fullUrl) {
         : "Không thể kết nối tới dịch vụ rút gọn is.gd.";
     const err = new Error(msg);
     err.statusCode = 502;
+    err.isNetwork = true;
     throw err;
   }
 
@@ -1624,7 +1643,34 @@ async function shortenViaIsGd(fullUrl) {
   } catch (_e) {
     data = null;
   }
+  return { response, data };
+}
 
+async function shortenViaIsGd(fullUrl, projectKey = "") {
+  const baseEndpoint = ISGD_API_BASE + "/create.php?format=json&url=" + encodeURIComponent(fullUrl);
+  const brandPrefix = resolveBrandShortPrefix(projectKey);
+
+  if (brandPrefix) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const alias = buildIsGdCustomAlias(projectKey);
+      const customEndpoint = baseEndpoint + "&shorturl=" + encodeURIComponent(alias);
+      const { response, data } = await requestIsGdCreate(customEndpoint);
+      if (response.ok && data && typeof data.shorturl === "string" && /^https?:\/\//i.test(data.shorturl)) {
+        return {
+          short_url: data.shorturl.trim(),
+          provider: "isgd",
+          provider_label: "is.gd (" + brandPrefix + ")"
+        };
+      }
+      const errMsgLower = String((data && data.errormessage) || "").toLowerCase();
+      const isAliasCollision = (data && Number(data.errorcode) === 2) || errMsgLower.includes("already exists");
+      if (!isAliasCollision) {
+        break;
+      }
+    }
+  }
+
+  const { response, data } = await requestIsGdCreate(baseEndpoint);
   if (response.ok && data && typeof data.shorturl === "string" && /^https?:\/\//i.test(data.shorturl)) {
     return {
       short_url: data.shorturl.trim(),
@@ -1726,8 +1772,16 @@ async function shortenViaAccessTrade({ campaignId, targetUrl, subField, subValue
 
 function extractRefFromTrackedUrlObj(urlObj) {
   if (!urlObj) return "";
-  const m = String(urlObj.pathname || "").match(/^\/l\/([a-z0-9]{4,20})\/?$/i);
+  const m = String(urlObj.pathname || "").match(/^\/l\/([a-z0-9_]{3,40})(?:\/([a-z0-9_-]{2,30}))?\/?$/i);
   return m ? m[1] : "";
+}
+
+function extractProjectFromTrackedUrlObj(urlObj) {
+  if (!urlObj) return "";
+  const m = String(urlObj.pathname || "").match(/^\/l\/([a-z0-9_]{3,40})(?:\/([a-z0-9_-]{2,30}))?\/?$/i);
+  if (m && m[2]) return m[2].toLowerCase();
+  const qProj = (urlObj.searchParams.get("p") || urlObj.searchParams.get("project") || "").trim().toLowerCase();
+  return qProj;
 }
 
 async function createShortTrackingLink({
@@ -1737,6 +1791,7 @@ async function createShortTrackingLink({
   targetUrl,
   subField,
   subValue,
+  projectKey,
   accessKey
 }) {
   let fullUrlObj;
@@ -1795,6 +1850,8 @@ async function createShortTrackingLink({
     provider === "accesstrade" || provider === "isgd" || provider === "tinyurl"
       ? provider
       : "auto";
+  const effectiveProjectKey =
+    String(projectKey || "").trim().toLowerCase() || extractProjectFromTrackedUrlObj(fullUrlObj);
 
   if (normalizedProvider === "accesstrade") {
     if (isTrackedBridgeUrl) {
@@ -1838,7 +1895,7 @@ async function createShortTrackingLink({
   }
 
   if (normalizedProvider === "isgd") {
-    const isgdRes = await shortenViaIsGd(fullUrlObj.toString());
+    const isgdRes = await shortenViaIsGd(fullUrlObj.toString(), effectiveProjectKey);
     return {
       short_url: isgdRes.short_url,
       provider: isgdRes.provider,
@@ -1863,8 +1920,8 @@ async function createShortTrackingLink({
     };
   }
 
-  // Chế độ "auto": nếu là link /l/<mã> thì giữ nguyên tầng đếm lượt nhấp bằng cách rút gọn qua is.gd -> TinyURL; nếu là link AccessTrade trực tiếp thì ưu tiên shorten.asia nếu có key
-  if (isAtTracking && accessKey && /^\d{4,30}$/.test(campaignId)) {
+  // Chế độ "auto": nếu có projectKey (muốn gắn thương hiệu) hoặc là link /l/<mã> thì dùng is.gd để giữ thương hiệu/tracking; ngược lại ưu tiên shorten.asia nếu có key
+  if (!effectiveProjectKey && isAtTracking && accessKey && /^\d{4,30}$/.test(campaignId)) {
     try {
       const atAutoRes = await shortenViaAccessTrade({
         campaignId,
@@ -1889,7 +1946,7 @@ async function createShortTrackingLink({
   }
 
   try {
-    const isgdAuto = await shortenViaIsGd(fullUrlObj.toString());
+    const isgdAuto = await shortenViaIsGd(fullUrlObj.toString(), effectiveProjectKey);
     return {
       short_url: isgdAuto.short_url,
       provider: isgdAuto.provider,
@@ -3262,6 +3319,7 @@ const server = http.createServer(async (req, res) => {
         ? rawSubField
         : "sub2";
     const subValue = typeof body.sub_value === "string" ? body.sub_value.trim() : "";
+    const projectKey = typeof body.project_key === "string" ? body.project_key.trim().toLowerCase() : "";
 
     if (!fullUrl) {
       sendJson(res, 400, { error: "Thiếu link bán hàng đầy đủ (full_url) để rút gọn." });
@@ -3280,6 +3338,7 @@ const server = http.createServer(async (req, res) => {
         targetUrl,
         subField,
         subValue,
+        projectKey,
         accessKey: effectiveKey
       });
       sendJson(res, 200, shortened);
