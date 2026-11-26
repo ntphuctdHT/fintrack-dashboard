@@ -1602,6 +1602,7 @@ async function resolveAccessTradeShortLink(rawUrl, allowedOrigin) {
 function resolveBrandShortPrefix(projectKey) {
   const raw = String(projectKey || "").trim().toLowerCase();
   if (!raw) return "";
+  if (raw === "dashboard" || raw === "dasboard") return "Dashboard";
   if (raw === "tnex") return "Tnex";
   if (raw === "vietcredit") return "VietCredit";
   const cleaned = raw.replace(/[^a-z0-9]/gi, "");
@@ -1612,8 +1613,9 @@ function resolveBrandShortPrefix(projectKey) {
 function buildIsGdCustomAlias(projectKey) {
   const prefix = resolveBrandShortPrefix(projectKey);
   if (!prefix) return "";
-  const suffix = crypto.randomBytes(4).toString("base64url").replace(/[^A-Za-z0-9]/g, "").slice(0, 6);
-  const safeSuffix = suffix.length >= 4 ? suffix : crypto.randomBytes(3).toString("hex");
+  const suffixLen = prefix === "Dashboard" ? 8 : 6;
+  const suffix = crypto.randomBytes(8).toString("base64url").replace(/[^A-Za-z0-9]/g, "").slice(0, suffixLen);
+  const safeSuffix = suffix.length >= suffixLen ? suffix : crypto.randomBytes(Math.ceil(suffixLen / 2)).toString("hex").slice(0, suffixLen);
   const combined = prefix + "_" + safeSuffix;
   return combined.slice(0, 30);
 }
@@ -1784,6 +1786,12 @@ function extractProjectFromTrackedUrlObj(urlObj) {
   return qProj;
 }
 
+function extractViewCodeFromDashboardUrlObj(urlObj) {
+  if (!urlObj) return "";
+  const m = String(urlObj.pathname || "").match(/^\/(?:xem|x)\/([a-z0-9]{12,64})\/?$/i);
+  return m ? m[1] : "";
+}
+
 async function createShortTrackingLink({
   fullUrl,
   provider,
@@ -1812,10 +1820,12 @@ async function createShortTrackingLink({
   const isAtTracking = isAccessTradeTrackingHost(fullUrlObj.hostname);
   const trackedRefInPath = extractRefFromTrackedUrlObj(fullUrlObj);
   const isTrackedBridgeUrl = Boolean(trackedRefInPath);
+  const dashboardViewCode = extractViewCodeFromDashboardUrlObj(fullUrlObj);
+  const isDashboardViewUrl = Boolean(dashboardViewCode);
 
-  if (!isAtTracking && !isTrackedBridgeUrl) {
+  if (!isAtTracking && !isTrackedBridgeUrl && !isDashboardViewUrl) {
     const hostErr = new Error(
-      "Chỉ hỗ trợ rút gọn link tracking AccessTrade (go.isclix.com / click.accesstrade.vn) hoặc link đếm nhấp (/l/<mã>)."
+      "Chỉ hỗ trợ rút gọn link tracking AccessTrade (go.isclix.com / click.accesstrade.vn), link đếm nhấp (/l/<mã>) hoặc link dashboard CTV (/xem/<mã>)."
     );
     hostErr.statusCode = 400;
     throw hostErr;
@@ -1846,15 +1856,26 @@ async function createShortTrackingLink({
     }
   }
 
+  if (isDashboardViewUrl) {
+    const viewHostLower = fullUrlObj.hostname.toLowerCase();
+    const isViewLoopback = viewHostLower === "localhost" || viewHostLower === "127.0.0.1";
+    if (fullUrlObj.protocol !== "https:" && !isViewLoopback && !SHORTENER_TEST_BASE) {
+      const viewProtoErr = new Error("Link dashboard CTV phải dùng giao thức https:// để rút gọn.");
+      viewProtoErr.statusCode = 400;
+      throw viewProtoErr;
+    }
+  }
+
   const normalizedProvider =
     provider === "accesstrade" || provider === "isgd" || provider === "tinyurl"
       ? provider
       : "auto";
   const effectiveProjectKey =
-    String(projectKey || "").trim().toLowerCase() || extractProjectFromTrackedUrlObj(fullUrlObj);
+    (isDashboardViewUrl ? "dashboard" : String(projectKey || "").trim().toLowerCase()) ||
+    extractProjectFromTrackedUrlObj(fullUrlObj);
 
   if (normalizedProvider === "accesstrade") {
-    if (isTrackedBridgeUrl) {
+    if (isTrackedBridgeUrl || isDashboardViewUrl) {
       const atBridgeErr = new Error(
         "Chế độ rút gọn chính chủ AccessTrade (shorten.asia) đi thẳng qua AccessTrade nên không qua link /l/<mã>. Hãy chọn 'Tự động' hoặc 'is.gd'."
       );

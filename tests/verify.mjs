@@ -115,10 +115,12 @@ test("CTV project copy buttons (VietCredit & TNEX) shorten, copy to clipboard, f
   };
   const vcBtn = makeMockBtn({ "data-ctv-action": "copy-project-sales", "data-project-key": "vietcredit", "data-ctv-id": "ctv1" }, "📋 Copy link VietCredit");
   const tnexBtn = makeMockBtn({ "data-ctv-action": "copy-project-sales", "data-project-key": "tnex", "data-ctv-id": "ctv1" }, "📋 Copy link TNEX (MSB)");
+  const viewShortBtn = makeMockBtn({ "data-ctv-action": "copy-view-short", "data-ctv-id": "ctv1" }, "Copy link dạng rút gọn");
 
   ctvListContainer.querySelectorAll = (sel) => {
     if (sel.includes('data-project-key="vietcredit"')) return [vcBtn];
     if (sel.includes('data-project-key="tnex"')) return [tnexBtn];
+    if (sel.includes('data-ctv-action="copy-view-short"')) return [viewShortBtn];
     return [];
   };
 
@@ -138,7 +140,12 @@ test("CTV project copy buttons (VietCredit & TNEX) shorten, copy to clipboard, f
       if (String(url).includes("/api/shorten-link")) {
         const body = JSON.parse(opts.body);
         shortenRequests.push(body);
-        const shortUrl = body.project_key === "tnex" ? "https://is.gd/Tnex_mock99" : "https://is.gd/VietCredit_mock88";
+        const shortUrl =
+          body.project_key === "dashboard"
+            ? "https://is.gd/Dashboard_mock77"
+            : body.project_key === "tnex"
+              ? "https://is.gd/Tnex_mock99"
+              : "https://is.gd/VietCredit_mock88";
         return {
           ok: true,
           status: 200,
@@ -228,6 +235,16 @@ test("CTV project copy buttons (VietCredit & TNEX) shorten, copy to clipboard, f
   assert.match(appToast.textContent, /https:\/\/is\.gd\/Tnex_mock99/);
   assert.match(tnexBtn.className, /btn-copied-flash/);
   assert.equal(tnexBtn.textContent, "✅ Đã sao chép!");
+
+  // Click Dashboard short view copy button
+  await ctvListContainer.trigger("click", {
+    target: { closest: (sel) => (sel === "[data-ctv-action]" ? viewShortBtn : null) }
+  });
+  assert.equal(shortenRequests[2].project_key, "dashboard");
+  assert.equal(copiedItems[2], "https://is.gd/Dashboard_mock77");
+  assert.match(appToast.textContent, /https:\/\/is\.gd\/Dashboard_mock77/);
+  assert.match(viewShortBtn.className, /btn-copied-flash/);
+  assert.equal(viewShortBtn.textContent, "✅ Đã sao chép!");
 });
 
 test("index.html pure logic functions work accurately (XSS, GMT+7, status, stats)", () => {
@@ -1378,6 +1395,21 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     assert.equal(shortenBridgeRes.status, 200);
     const shortenBridgeJson = await shortenBridgeRes.json();
     assert.equal(shortenBridgeJson.short_url, "https://is.gd/mock123");
+
+    // Shortening /xem/<viewCode> produces Dashboard-branded is.gd link
+    const shortenViewRes = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_url: "https://bridge.example.vn/xem/minhviewcode1234567890",
+        provider: "isgd",
+        project_key: "dashboard"
+      })
+    });
+    assert.equal(shortenViewRes.status, 200);
+    const shortenViewJson = await shortenViewRes.json();
+    assert.equal(shortenViewJson.short_url, "https://is.gd/mock123");
+    assert.equal(shortenViewJson.provider_label, "is.gd (Dashboard)");
 
     const shortenBridgeAtReject = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
       method: "POST",
