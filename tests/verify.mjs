@@ -1033,8 +1033,8 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     assert.equal(viewData.totals.total, 2);
     assert.equal(viewData.totals.approved, 1);
     assert.equal(viewData.totals.cancelled, 1);
-    // Commission is hidden from CTV view payload; order IDs are truncated to first 6 chars
-    assert.equal(viewData.totals.commission, undefined);
+    // Expected commission KPI stays visible (360000); per-order commission is hidden and order IDs truncated to 6 chars
+    assert.equal(viewData.totals.commission, 360000);
     assert.equal(viewData.orders.length, 2);
     assert.equal(viewData.orders[0].commission, undefined);
     assert.ok(viewData.orders[0].id.length <= 6);

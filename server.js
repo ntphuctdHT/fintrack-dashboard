@@ -2357,7 +2357,10 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
 
   const policy = bridgeState.policy || {};
   const ctvField = normalizeCtvFieldServer(policy.ctvField);
+  const defaultRisk = normalizeRiskTier(policy.defaultRisk) || "high";
+  const atRates = policy.atRates || DEFAULT_AT_RATES;
   const ctvRates = policy.ctvRates || DEFAULT_CTV_RATES;
+  const leadRisks = policy.leadRisks || {};
   const ctvRefLower = String(ctv.ref || "").trim().toLowerCase();
 
   let sourceLeads = Array.isArray(bridgeState.syncedLeads) ? bridgeState.syncedLeads : [];
@@ -2442,7 +2445,8 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
     pending: 0,
     approved: 0,
     reconciled: 0,
-    cancelled: 0
+    cancelled: 0,
+    commission: 0
   };
 
   for (const lead of sourceLeads) {
@@ -2453,8 +2457,30 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
     if (leadRefVal !== ctvRefLower) continue;
 
     const status = mapViewOrderStatus(lead.statusKey);
+    const campUpper = String(lead.campaignName || "").toUpperCase();
+
+    let ctvComm = 0;
+    if (status !== "cancelled") {
+      if (campUpper.includes("TNEX")) {
+        ctvComm = Math.round((Number(lead.commission) || 0) * (2.0 / 2.5));
+      } else if (campUpper.includes("VPBANK") || campUpper.includes("VP BANK")) {
+        ctvComm = Math.round((Number(lead.commission) || 0) * (2.0 / 2.5));
+      } else {
+        const riskKey =
+          normalizeRiskTier(leadRisks[lead.conversionId]) ||
+          normalizeRiskTier(lead.apiRiskLevel) ||
+          defaultRisk;
+        const atRate = Number(atRates[riskKey]) > 0 ? Number(atRates[riskKey]) : DEFAULT_AT_RATES[riskKey];
+        const ctvRate = Number(ctvRates[riskKey]) >= 0 ? Number(ctvRates[riskKey]) : DEFAULT_CTV_RATES[riskKey];
+        ctvComm = Math.round((Number(lead.commission) || 0) * (ctvRate / atRate));
+      }
+    }
+
     totals.total += 1;
     totals[status] += 1;
+    if (status !== "cancelled") {
+      totals.commission += ctvComm;
+    }
 
     const rawOrderId = String(lead.orderId || lead.conversionId || "").trim();
     orders.push({

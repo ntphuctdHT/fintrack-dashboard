@@ -14,7 +14,7 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
   assert.match(INDEX_HTML, /sessionStorage/);
   assert.match(INDEX_HTML, /Tổng số hồ sơ trong Supabase/);
   assert.match(INDEX_HTML, /Đồng bộ ngay/);
-  assert.doesNotMatch(CTV_VIEW_HTML, /Hoa hồng dự kiến/);
+  assert.match(CTV_VIEW_HTML, /Hoa hồng dự kiến/);
   assert.doesNotMatch(CTV_VIEW_HTML, /Hoa hồng CTV nhận/);
 
   const conversionsDb = new Map();
@@ -327,7 +327,7 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
     assert.equal(ctvRes.status, 200);
     const ctvJson = await ctvRes.json();
     assert.equal(ctvJson.totals.total, 1, "Only minh88 row should be visible to Minh");
-    assert.equal(ctvJson.totals.commission, undefined, "Commission KPI must be omitted on CTV payload");
+    assert.ok(ctvJson.totals.commission > 0, "Expected commission KPI must remain visible for CTV");
     assert.equal(ctvJson.orders.length, 1);
     assert.equal(ctvJson.orders[0].id, "ORD123", "Order ID must be truncated to first 6 chars on server");
     assert.equal(ctvJson.orders[0].order_value, 25000000);

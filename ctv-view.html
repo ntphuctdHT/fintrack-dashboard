@@ -1887,7 +1887,8 @@
             { key: "pending", label: "Chờ duyệt", value: displayTotals.pending.toLocaleString("vi-VN"), valCls: "kpi-val-pending", cardCls: "" },
             { key: "approved", label: "Đã duyệt", value: displayTotals.approved.toLocaleString("vi-VN"), valCls: "kpi-val-approved", cardCls: "" },
             { key: "reconciled", label: "Đã đối soát", value: displayTotals.reconciled.toLocaleString("vi-VN"), valCls: "kpi-val-reconciled", cardCls: "" },
-            { key: "cancelled", label: "Đã huỷ", value: displayTotals.cancelled.toLocaleString("vi-VN"), valCls: "kpi-val-cancelled", cardCls: "" }
+            { key: "cancelled", label: "Đã huỷ", value: displayTotals.cancelled.toLocaleString("vi-VN"), valCls: "kpi-val-cancelled", cardCls: "" },
+            { key: "commission", label: "Hoa hồng dự kiến", value: formatVnd(displayTotals.commission), valCls: "kpi-val-commission", cardCls: "kpi-card-highlight" }
           ];
 
           var cards = allCards.filter(function (c) {

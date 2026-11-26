@@ -134,7 +134,7 @@ test("AccessTrade snapshot cache in Supabase guarantees instant CTV loading and 
     const viewData = await viewRes.json();
     assert.equal(viewData.name, "Thanh");
     assert.equal(viewData.totals.approved, 1);
-    assert.equal(viewData.totals.commission, undefined);
+    assert.equal(viewData.totals.commission, 360000);
     assert.equal(viewData.orders.length, 1);
     assert.equal(viewData.orders[0].id, "SNAP-0");
 
