@@ -49,8 +49,13 @@ const SUPABASE_URL = (
 const SUPABASE_KEY = (
   process.env.SUPABASE_KEY || "sb_publishable_NExQDC6cWPJXoxwHEm4Jug_zbYZA5rD"
 ).trim();
+const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 
 const ENV_ACCESSTRADE_KEY = (process.env.ACCESSTRADE_KEY || "").trim();
+const SYNC_SECRET = (process.env.SYNC_SECRET || "").trim();
+const CRON_SECRET = (process.env.CRON_SECRET || "").trim();
+const SYNC_PACE_MS = process.env.SYNC_PACE_MS !== undefined ? Math.max(0, Number(process.env.SYNC_PACE_MS) || 0) : 7000;
+const SYNC_RETRY_DELAYS_MS = process.env.SYNC_TEST_FAST === "1" ? [20, 40, 80] : [2000, 4000, 8000];
 const ALLOWED_ORIGIN = (process.env.ALLOWED_ORIGIN || "*").trim() || "*";
 const PORT = Number(process.env.PORT) || 3000;
 const AT_BASE = (process.env.AT_BASE || "https://api.accesstrade.vn").trim().replace(/\/+$/, "");
@@ -557,11 +562,601 @@ function isValidDateYmd(value) {
 function setCorsHeaders(res) {
   res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-AccessTrade-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-AccessTrade-Key, X-Sync-Secret, X-Cron-Secret, Authorization");
   res.setHeader("Access-Control-Expose-Headers", "X-CTV-Bridge");
   if (ALLOWED_ORIGIN !== "*") {
     res.setHeader("Vary", "Origin");
   }
+}
+
+const SYNC_STATE_KEY = "conversions_sync";
+const SYNC_LOCK_TTL_MS = 90 * 1000;
+const SYNC_AUTH_FAIL_WINDOW_MS = 15 * 60 * 1000;
+const SYNC_AUTH_MAX_FAILURES = 5;
+const syncAuthFailByIp = new Map();
+
+function sleepMs(ms) {
+  const duration = Math.max(0, Number(ms) || 0);
+  if (duration <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, duration));
+}
+
+function timingSafeSecretMatch(provided, expected) {
+  const a = typeof provided === "string" ? provided : "";
+  const b = typeof expected === "string" ? expected : "";
+  if (!a || !b) return false;
+  const ha = crypto.createHash("sha256").update(a, "utf8").digest();
+  const hb = crypto.createHash("sha256").update(b, "utf8").digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+function verifySyncSecretAuth(req, expectedSecret, candidateHeaders) {
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const rec = syncAuthFailByIp.get(ip);
+  if (rec && rec.lockedUntil && now < rec.lockedUntil) {
+    return { ok: false, status: 429, error: "Quá nhiều lần nhập sai mã bí mật. Vui lòng thử lại sau 15 phút." };
+  }
+  if (!expectedSecret) {
+    return { ok: false, status: 503, error: "Chưa cấu hình biến môi trường mã bí mật trên máy chủ." };
+  }
+  let provided = "";
+  for (const hName of candidateHeaders) {
+    const raw = req.headers[hName];
+    if (typeof raw === "string" && raw.trim()) {
+      const val = raw.trim();
+      if (hName === "authorization" && /^bearer\s+/i.test(val)) {
+        provided = val.replace(/^bearer\s+/i, "").trim();
+      } else if (hName !== "authorization") {
+        provided = val;
+      }
+      if (provided) break;
+    }
+  }
+  if (timingSafeSecretMatch(provided, expectedSecret)) {
+    syncAuthFailByIp.delete(ip);
+    return { ok: true };
+  }
+  const prevCount = rec && now - rec.firstFailAt <= SYNC_AUTH_FAIL_WINDOW_MS ? rec.count : 0;
+  const nextCount = prevCount + 1;
+  const lockedUntil = nextCount >= SYNC_AUTH_MAX_FAILURES ? now + SYNC_AUTH_FAIL_WINDOW_MS : 0;
+  syncAuthFailByIp.set(ip, {
+    count: nextCount,
+    firstFailAt: prevCount > 0 && rec ? rec.firstFailAt : now,
+    lockedUntil
+  });
+  if (lockedUntil) {
+    return { ok: false, status: 429, error: "Nhập sai mã bí mật quá số lần cho phép. Vui lòng thử lại sau 15 phút." };
+  }
+  return { ok: false, status: 401, error: "Mã bí mật đồng bộ không hợp lệ." };
+}
+
+async function supabaseServiceFetch(subPath, options = {}) {
+  const keyToUse = SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !keyToUse) return null;
+  const targetUrl = `${SUPABASE_URL}/rest/v1/${subPath.replace(/^\/+/, "")}`;
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 12000) : null;
+  try {
+    const headers = {
+      apikey: keyToUse,
+      Authorization: `Bearer ${keyToUse}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    };
+    const res = await fetch(targetUrl, {
+      ...options,
+      headers,
+      signal: controller ? controller.signal : undefined
+    });
+    if (timer) clearTimeout(timer);
+    return res;
+  } catch (_e) {
+    if (timer) clearTimeout(timer);
+    return null;
+  }
+}
+
+async function getSyncStateRow(key = SYNC_STATE_KEY) {
+  const res = await supabaseServiceFetch(`sync_state?key=eq.${encodeURIComponent(key)}&select=*`);
+  if (!res || !res.ok) return null;
+  const rows = await res.json().catch(() => null);
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const val = rows[0].value;
+  return val && typeof val === "object" && !Array.isArray(val) ? val : {};
+}
+
+async function saveSyncStateRow(val, key = SYNC_STATE_KEY) {
+  const res = await supabaseServiceFetch("sync_state?on_conflict=key", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify({
+      key,
+      value: val && typeof val === "object" ? val : {},
+      updated_at: new Date().toISOString()
+    })
+  });
+  return Boolean(res && res.ok);
+}
+
+function ensureGmt7Iso(rawVal) {
+  if (rawVal == null) return null;
+  const s = String(rawVal).trim();
+  if (!s) return null;
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+    const dt = new Date(s);
+    return Number.isNaN(dt.getTime()) ? null : s;
+  }
+  const normalized = s.includes("T") ? s : s.replace(" ", "T");
+  const withOffset = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(normalized)
+    ? normalized + (normalized.length === 16 ? ":00+07:00" : "+07:00")
+    : normalized + "+07:00";
+  const dt = new Date(withOffset);
+  return Number.isNaN(dt.getTime()) ? null : withOffset;
+}
+
+function pickAtTrackingField(item, keyName) {
+  if (!item || typeof item !== "object") return "";
+  const extra = item._extra && typeof item._extra === "object" ? item._extra : {};
+  const extraParams = extra.parameters && typeof extra.parameters === "object" ? extra.parameters : {};
+  const params = item.parameters && typeof item.parameters === "object" ? item.parameters : {};
+  const candidates = [item[keyName], extra[keyName], extraParams[keyName], params[keyName]];
+  for (const c of candidates) {
+    if (c != null && String(c).trim() !== "") return String(c).trim();
+  }
+  return "";
+}
+
+function mapAccessTradeItemToConversionRow(item) {
+  if (!item || typeof item !== "object") return null;
+  const rawConvId = item.conversion_id != null && item.conversion_id !== "" ? item.conversion_id : item.id;
+  const convIdNum = Number(rawConvId);
+  if (!Number.isFinite(convIdNum) || convIdNum <= 0 || !Number.isInteger(convIdNum)) {
+    return null;
+  }
+  const sub2 = pickAtTrackingField(item, "sub2");
+  const utmCampaign = pickAtTrackingField(item, "utm_campaign");
+  const sub2Norm = sub2.trim().toLowerCase();
+  const utmNorm = utmCampaign.trim().toLowerCase();
+  const ctvRef = sub2Norm || utmNorm || null;
+  let ctvSource = "none";
+  if (sub2Norm && utmNorm) {
+    ctvSource = sub2Norm === utmNorm ? "both" : "sub2";
+  } else if (sub2Norm) {
+    ctvSource = "sub2";
+  } else if (utmNorm) {
+    ctvSource = "utm_campaign";
+  }
+  const ctvConflict = Boolean(sub2Norm && utmNorm && sub2Norm !== utmNorm);
+
+  const rawStatus = Number(item.status);
+  const statusInt = Number.isFinite(rawStatus) ? Math.trunc(rawStatus) : 0;
+  const isConfInt = item.is_confirmed === true ? 1 : (Number.isFinite(Number(item.is_confirmed)) ? Math.trunc(Number(item.is_confirmed)) : 0);
+  const rawOrderVal = item.transaction_value != null && item.transaction_value !== "" ? Number(item.transaction_value) : Number(item.billing);
+  const orderValue = Number.isFinite(rawOrderVal) ? rawOrderVal : 0;
+  const rawComm = Number(item.commission);
+  const commission = Number.isFinite(rawComm) ? rawComm : 0;
+
+  const salesTime = ensureGmt7Iso(item.transaction_time || item.sales_time || item.click_time);
+  const updateTime = ensureGmt7Iso(item.update_time || item.transaction_time || item.sales_time);
+  const orderId = String(item.transaction_id != null && item.transaction_id !== "" ? item.transaction_id : (item.order_id || convIdNum)).trim();
+  const advertiser = String(
+    item.merchant ||
+    item.campaign_name ||
+    (item.campaign_id != null && item.campaign_id !== "" ? "Chiến dịch #" + item.campaign_id : "Sản phẩm tài chính")
+  ).trim();
+
+  return {
+    conversion_id: convIdNum,
+    sales_time: salesTime,
+    order_id: orderId,
+    order_value: orderValue,
+    advertiser,
+    commission,
+    status: statusInt,
+    is_confirmed: isConfInt,
+    update_time: updateTime,
+    utm_campaign: utmCampaign || null,
+    sub2: sub2 || null,
+    ctv_ref: ctvRef,
+    ctv_source: ctvSource,
+    ctv_conflict: ctvConflict,
+    tracking: {
+      sub1: pickAtTrackingField(item, "sub1"),
+      sub2,
+      sub3: pickAtTrackingField(item, "sub3"),
+      sub4: pickAtTrackingField(item, "sub4"),
+      utm_source: pickAtTrackingField(item, "utm_source"),
+      utm_medium: pickAtTrackingField(item, "utm_medium"),
+      utm_campaign: utmCampaign,
+      utm_content: pickAtTrackingField(item, "utm_content"),
+      extra: item._extra && typeof item._extra === "object" ? item._extra : null
+    },
+    synced_at: new Date().toISOString()
+  };
+}
+
+async function upsertConversionsBatch(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return { ok: true, count: 0 };
+  let totalUpserted = 0;
+  const batchSize = 200;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const chunk = rows.slice(i, i + batchSize);
+    const res = await supabaseServiceFetch("conversions?on_conflict=conversion_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify(chunk)
+    });
+    if (!res || !res.ok) {
+      let detail = res ? "HTTP " + res.status : "Không kết nối được Supabase";
+      try {
+        if (res) {
+          const txt = await res.text();
+          if (txt) detail += ": " + txt.slice(0, 160);
+        }
+      } catch (_e) {}
+      throw new Error("Ghi dữ liệu vào Supabase conversions thất bại (" + detail + ").");
+    }
+    totalUpserted += chunk.length;
+  }
+  return { ok: true, count: totalUpserted };
+}
+
+async function enforceSharedSyncRateBudget(syncState) {
+  if (!syncState.rate_budget || typeof syncState.rate_budget !== "object") {
+    syncState.rate_budget = { last_request_at: "", recent_requests: [] };
+  }
+  const now = Date.now();
+  const lastMs = syncState.rate_budget.last_request_at ? new Date(syncState.rate_budget.last_request_at).getTime() : 0;
+  if (lastMs > 0 && now - lastMs < SYNC_PACE_MS) {
+    await sleepMs(SYNC_PACE_MS - (now - lastMs));
+  }
+
+  let checkNow = Date.now();
+  let recent = Array.isArray(syncState.rate_budget.recent_requests)
+    ? syncState.rate_budget.recent_requests
+        .map((t) => new Date(t).getTime())
+        .filter((ms) => Number.isFinite(ms) && checkNow - ms < 60000)
+        .sort((a, b) => a - b)
+    : [];
+
+  if (recent.length >= 10) {
+    const waitForWindow = Math.max(0, 60000 - (checkNow - recent[0]) + 250);
+    if (waitForWindow > 30000) {
+      const err = new Error("Đã đạt ngưỡng 10 request/phút dùng chung của AccessTrade. Vui lòng thử lại sau " + Math.ceil(waitForWindow / 1000) + " giây.");
+      err.statusCode = 429;
+      err.retryAfterSec = Math.ceil(waitForWindow / 1000);
+      throw err;
+    }
+    await sleepMs(waitForWindow);
+    checkNow = Date.now();
+    recent = recent.filter((ms) => checkNow - ms < 60000);
+  }
+
+  const stampIso = new Date().toISOString();
+  recent.push(Date.now());
+  syncState.rate_budget = {
+    last_request_at: stampIso,
+    recent_requests: recent.slice(-15).map((ms) => new Date(ms).toISOString())
+  };
+  await saveSyncStateRow(syncState);
+}
+
+async function fetchTransactionsSyncPageWithRetry(queryParams, accessKey, syncState) {
+  const maxAttempts = 4; // 1 initial + max 3 retries
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await enforceSharedSyncRateBudget(syncState);
+    const upstreamUrl = new URL(AT_BASE + "/v1/transactions");
+    for (const [k, v] of Object.entries(queryParams)) {
+      if (v != null && String(v) !== "") {
+        upstreamUrl.searchParams.set(k, String(v));
+      }
+    }
+
+    let response = null;
+    let netErr = null;
+    try {
+      response = await fetch(upstreamUrl.toString(), {
+        method: "GET",
+        headers: {
+          Authorization: "Token " + accessKey,
+          "Content-Type": "application/json"
+        },
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
+      });
+    } catch (err) {
+      netErr = err;
+    }
+
+    if (response && response.status === 429) {
+      let retrySec = 10;
+      try {
+        const hdr = response.headers.get("retry-after");
+        if (hdr && Number.isFinite(Number(hdr))) retrySec = Math.max(1, Number(hdr));
+        const body429 = await response.json().catch(() => null);
+        if (body429 && Number.isFinite(Number(body429.retry_after))) {
+          retrySec = Math.max(1, Number(body429.retry_after));
+        }
+      } catch (_e) {}
+      if (attempt < maxAttempts - 1) {
+        const cappedWait = process.env.SYNC_TEST_FAST === "1"
+          ? Math.min(200, retrySec * 10)
+          : Math.min(30000, retrySec * 1000);
+        await sleepMs(cappedWait);
+        continue;
+      }
+      const err429 = new Error("AccessTrade giới hạn tốc độ (429). Vui lòng thử lại sau " + retrySec + " giây.");
+      err429.statusCode = 429;
+      throw err429;
+    }
+
+    const isRetryableHttp = response && (response.status === 502 || response.status === 503 || response.status === 504);
+    if (netErr || isRetryableHttp) {
+      if (attempt < maxAttempts - 1) {
+        await sleepMs(SYNC_RETRY_DELAYS_MS[attempt] || 8000);
+        continue;
+      }
+      const err5xx = new Error(
+        netErr
+          ? "Lỗi kết nối AccessTrade khi đồng bộ."
+          : "AccessTrade tạm gián đoạn (HTTP " + response.status + ") sau 3 lần thử lại."
+      );
+      err5xx.statusCode = 502;
+      throw err5xx;
+    }
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        const authErr = new Error("Access Key trên máy chủ không hợp lệ hoặc hết quyền (HTTP " + response.status + ").");
+        authErr.statusCode = 502;
+        throw authErr;
+      }
+      const errHttp = new Error("AccessTrade trả về HTTP " + response.status + ".");
+      errHttp.statusCode = 502;
+      throw errHttp;
+    }
+
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (_jsonErr) {
+      if (attempt < maxAttempts - 1) {
+        await sleepMs(SYNC_RETRY_DELAYS_MS[attempt] || 8000);
+        continue;
+      }
+      const parseErr = new Error("AccessTrade trả về JSON không hợp lệ.");
+      parseErr.statusCode = 502;
+      throw parseErr;
+    }
+
+    // Luôn kiểm tra success: false trước khi đọc data
+    if (payload && payload.success === false) {
+      if (attempt < maxAttempts - 1) {
+        await sleepMs(SYNC_RETRY_DELAYS_MS[attempt] || 8000);
+        continue;
+      }
+      const apiMsg = typeof payload.message === "string" && payload.message.trim()
+        ? payload.message.trim()
+        : "AccessTrade trả về success: false.";
+      const failErr = new Error(apiMsg);
+      failErr.statusCode = 502;
+      throw failErr;
+    }
+
+    return Array.isArray(payload && payload.data) ? payload.data : [];
+  }
+  return [];
+}
+
+function buildBackfillWeeks60d(nowDate = new Date()) {
+  const endMs = nowDate.getTime();
+  const start60Ms = endMs - 60 * 86400000;
+  const weeks = [];
+  let cursorEnd = endMs;
+  while (cursorEnd > start60Ms) {
+    const cursorStart = Math.max(start60Ms, cursorEnd - 7 * 86400000);
+    weeks.push({
+      since: new Date(cursorStart).toISOString().replace(/\.\d{3}Z$/, "Z"),
+      until: new Date(cursorEnd).toISOString().replace(/\.\d{3}Z$/, "Z")
+    });
+    cursorEnd = cursorStart;
+  }
+  return weeks;
+}
+
+async function runConversionsSync({ mode = "incremental", source = "manual", weekIndex = 0, limit = 200 } = {}) {
+  if (!ENV_ACCESSTRADE_KEY) {
+    const err = new Error("Chưa cấu hình biến môi trường ACCESSTRADE_KEY trên máy chủ.");
+    err.statusCode = 500;
+    throw err;
+  }
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    const err = new Error("Chưa cấu hình SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY trên máy chủ.");
+    err.statusCode = 500;
+    throw err;
+  }
+
+  const normalizedMode = mode === "backfill" ? "backfill" : "incremental";
+  const pageLimit = Math.min(300, Math.max(100, Math.round(Number(limit) || 200)));
+  const syncState = (await getSyncStateRow()) || {};
+  const nowMs = Date.now();
+
+  if (
+    syncState.lock &&
+    syncState.lock.locked === true &&
+    syncState.lock.expires_at &&
+    new Date(syncState.lock.expires_at).getTime() > nowMs
+  ) {
+    const err = new Error("Đang có một tiến trình đồng bộ khác đang chạy (khóa chống chạy chồng). Vui lòng đợi hoàn tất.");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const runId = crypto.randomBytes(6).toString("hex");
+  syncState.lock = {
+    locked: true,
+    locked_at: new Date(nowMs).toISOString(),
+    expires_at: new Date(nowMs + SYNC_LOCK_TTL_MS).toISOString(),
+    run_id: runId
+  };
+  await saveSyncStateRow(syncState);
+
+  let upsertedCount = 0;
+  let pagesFetched = 0;
+
+  try {
+    const allRows = [];
+    if (normalizedMode === "incremental") {
+      const endDt = new Date();
+      const startDt = new Date(endDt.getTime() - 48 * 3600000); // 48 giờ gần nhất (<= 31 ngày)
+      const startIso = startDt.toISOString().replace(/\.\d{3}Z$/, "Z");
+      const endIso = endDt.toISOString().replace(/\.\d{3}Z$/, "Z");
+
+      for (let page = 1; page <= MAX_PAGES; page += 1) {
+        const pageItems = await fetchTransactionsSyncPageWithRetry(
+          {
+            update_time_start: startIso,
+            update_time_end: endIso,
+            limit: pageLimit,
+            page
+          },
+          ENV_ACCESSTRADE_KEY,
+          syncState
+        );
+        pagesFetched += 1;
+        for (const item of pageItems) {
+          const mapped = mapAccessTradeItemToConversionRow(item);
+          if (mapped) allRows.push(mapped);
+        }
+        if (pageItems.length < pageLimit) break;
+      }
+
+      if (allRows.length > 0) {
+        const resUp = await upsertConversionsBatch(allRows);
+        upsertedCount = resUp.count;
+      }
+
+      const doneIso = new Date().toISOString();
+      syncState.last_sync_at = doneIso;
+      syncState.last_incremental_at = doneIso;
+      syncState.last_mode = "incremental";
+      syncState.last_source = source;
+      syncState.last_status = "success";
+      syncState.last_error = "";
+      syncState.last_upserted = upsertedCount;
+      return {
+        ok: true,
+        mode: "incremental",
+        pagesFetched,
+        upsertedCount,
+        hasMore: false,
+        syncState
+      };
+    } else {
+      const weeks = buildBackfillWeeks60d(new Date());
+      const targetWeekIdx = Math.max(0, Math.min(weeks.length - 1, Math.trunc(Number(weekIndex) || 0)));
+      const targetWeek = weeks[targetWeekIdx];
+
+      for (let page = 1; page <= MAX_PAGES; page += 1) {
+        const pageItems = await fetchTransactionsSyncPageWithRetry(
+          {
+            since: targetWeek.since,
+            until: targetWeek.until,
+            limit: pageLimit,
+            page
+          },
+          ENV_ACCESSTRADE_KEY,
+          syncState
+        );
+        pagesFetched += 1;
+        for (const item of pageItems) {
+          const mapped = mapAccessTradeItemToConversionRow(item);
+          if (mapped) allRows.push(mapped);
+        }
+        if (pageItems.length < pageLimit) break;
+      }
+
+      if (allRows.length > 0) {
+        const resUp = await upsertConversionsBatch(allRows);
+        upsertedCount = resUp.count;
+      }
+
+      const hasMore = targetWeekIdx + 1 < weeks.length;
+      const doneIso = new Date().toISOString();
+      syncState.last_sync_at = doneIso;
+      syncState.last_backfill_at = doneIso;
+      syncState.last_mode = "backfill";
+      syncState.last_source = source;
+      syncState.last_status = "success";
+      syncState.last_error = "";
+      syncState.last_upserted = upsertedCount;
+      syncState.backfill_progress = {
+        week_index: targetWeekIdx,
+        total_weeks: weeks.length,
+        completed: !hasMore,
+        stopped_reason: ""
+      };
+      return {
+        ok: true,
+        mode: "backfill",
+        weekIndex: targetWeekIdx,
+        totalWeeks: weeks.length,
+        weekRange: targetWeek,
+        pagesFetched,
+        upsertedCount,
+        hasMore,
+        nextWeekIndex: hasMore ? targetWeekIdx + 1 : null,
+        syncState
+      };
+    }
+  } catch (syncErr) {
+    const errMsg = syncErr && syncErr.message ? String(syncErr.message) : "Lỗi đồng bộ không xác định.";
+    syncState.last_mode = normalizedMode;
+    syncState.last_source = source;
+    syncState.last_status = "error";
+    syncState.last_error = errMsg;
+    if (normalizedMode === "backfill") {
+      syncState.backfill_progress = {
+        week_index: Math.trunc(Number(weekIndex) || 0),
+        total_weeks: 9,
+        completed: false,
+        stopped_reason: errMsg
+      };
+    }
+    throw syncErr;
+  } finally {
+    syncState.lock = {
+      locked: false,
+      locked_at: syncState.lock ? syncState.lock.locked_at : "",
+      expires_at: "",
+      run_id: runId
+    };
+    await saveSyncStateRow(syncState).catch(() => {});
+  }
+}
+
+async function getConversionsFromSupabase({ ctvRef = "", limit = 1000 } = {}) {
+  const fetcher = SUPABASE_SERVICE_ROLE_KEY ? supabaseServiceFetch : supabaseFetch;
+  if (!SUPABASE_URL || (!SUPABASE_SERVICE_ROLE_KEY && !SUPABASE_KEY)) return null;
+  const maxRows = Math.min(2000, Math.max(1, Math.round(Number(limit) || 1000)));
+  let pathStr = `conversions?select=*&order=sales_time.desc&limit=${maxRows}`;
+  if (ctvRef) {
+    const refSafe = encodeURIComponent(String(ctvRef).trim().toLowerCase());
+    pathStr = `conversions?or=(ctv_ref.eq.${refSafe},sub2.eq.${refSafe},utm_campaign.eq.${refSafe})&select=*&order=sales_time.desc&limit=${maxRows}`;
+  }
+  const res = await fetcher(pathStr, {
+    headers: { Prefer: "count=exact" }
+  });
+  if (!res || !res.ok) return null;
+  const rows = await res.json().catch(() => null);
+  if (!Array.isArray(rows)) return null;
+  let totalExact = rows.length;
+  const contentRange = res.headers.get("content-range") || "";
+  const mRange = contentRange.match(/\/(\d+)$/);
+  if (mRange && Number.isFinite(Number(mRange[1]))) {
+    totalExact = Number(mRange[1]);
+  }
+  return { rows, totalInSupabase: totalExact };
 }
 
 function readJsonBody(req, maxBytes) {
@@ -1720,6 +2315,30 @@ function normalizeServerRawTransaction(raw, idx) {
   };
 }
 
+function normalizeConversionRowToLead(row) {
+  const subs = row && row.tracking && typeof row.tracking === "object" ? row.tracking : {};
+  const sub2 = row.sub2 != null ? String(row.sub2).trim() : (typeof subs.sub2 === "string" ? subs.sub2.trim() : "");
+  const utmCampaign = row.utm_campaign != null ? String(row.utm_campaign).trim() : (typeof subs.utm_campaign === "string" ? subs.utm_campaign.trim() : "");
+  return {
+    conversionId: String(row.conversion_id || ""),
+    orderId: String(row.order_id || row.conversion_id || ""),
+    orderValue: Number.isFinite(Number(row.order_value)) ? Number(row.order_value) : 0,
+    campaignName: String(row.advertiser || "Sản phẩm tài chính"),
+    timeRaw: String(row.sales_time || row.update_time || ""),
+    commission: Number.isFinite(Number(row.commission)) ? Number(row.commission) : 0,
+    statusKey: mapServerLeadStatus(row.status, row.is_confirmed),
+    ctvRef: row.ctv_ref ? String(row.ctv_ref).trim().toLowerCase() : (sub2 || utmCampaign).toLowerCase(),
+    subs: {
+      sub1: typeof subs.sub1 === "string" ? subs.sub1.trim() : "",
+      sub2,
+      sub3: typeof subs.sub3 === "string" ? subs.sub3.trim() : "",
+      sub4: typeof subs.sub4 === "string" ? subs.sub4.trim() : "",
+      utm_campaign: utmCampaign
+    },
+    apiRiskLevel: ""
+  };
+}
+
 async function buildCtvViewPayload(ctv, reqOrigin) {
   // Nạp settings mới nhất từ Supabase để đảm bảo ctvLinkConfig, policy và accessKey luôn được đồng bộ
   if (bridgeState.mode !== "demo") {
@@ -1738,40 +2357,64 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
 
   const policy = bridgeState.policy || {};
   const ctvField = normalizeCtvFieldServer(policy.ctvField);
-  const defaultRisk = normalizeRiskTier(policy.defaultRisk) || "high";
-  const atRates = policy.atRates || DEFAULT_AT_RATES;
   const ctvRates = policy.ctvRates || DEFAULT_CTV_RATES;
-  const leadRisks = policy.leadRisks || {};
+  const ctvRefLower = String(ctv.ref || "").trim().toLowerCase();
 
   let sourceLeads = Array.isArray(bridgeState.syncedLeads) ? bridgeState.syncedLeads : [];
+  let loadedFromConversionsDb = false;
   const effectiveKey = bridgeState.mode === "demo" ? "" : (bridgeRuntimeKey || ENV_ACCESSTRADE_KEY || (bridgeState && bridgeState.accessKey));
 
   if (bridgeState.mode !== "demo") {
-    let dbCache = null;
+    // Ưu tiên đọc từ bảng public.conversions trên Supabase theo ctv_ref của đúng CTV đó
     try {
-      dbCache = await getLeadsSnapshotFromSupabase();
-    } catch (_cacheErr) {}
-
-    let cachedLeads = null;
-    let expiresAt = null;
-    if (dbCache) {
-      if (Array.isArray(dbCache.leads) && dbCache.leads.length > 0) {
-        cachedLeads = dbCache.leads;
-        expiresAt = dbCache.expires_at;
-      } else if (Array.isArray(dbCache) && dbCache.length > 0) {
-        cachedLeads = dbCache;
+      const convResult = await getConversionsFromSupabase({ ctvRef: ctvRefLower, limit: 1000 });
+      if (convResult && Array.isArray(convResult.rows) && convResult.rows.length > 0) {
+        loadedFromConversionsDb = true;
+        sourceLeads = convResult.rows.map(normalizeConversionRowToLead);
       }
-    }
+    } catch (_convErr) {}
 
-    const isExpired = !expiresAt || Date.now() > new Date(expiresAt).getTime();
+    if (!loadedFromConversionsDb) {
+      let dbCache = null;
+      try {
+        dbCache = await getLeadsSnapshotFromSupabase();
+      } catch (_cacheErr) {}
 
-    if (cachedLeads && cachedLeads.length > 0) {
-      // Tải ngay từ snapshot Supabase (siêu tốc ~0.05s, loại bỏ hoàn toàn độ trễ serverless)
-      sourceLeads = cachedLeads;
-      bridgeState.syncedLeads = cachedLeads;
+      let cachedLeads = null;
+      let expiresAt = null;
+      if (dbCache) {
+        if (Array.isArray(dbCache.leads) && dbCache.leads.length > 0) {
+          cachedLeads = dbCache.leads;
+          expiresAt = dbCache.expires_at;
+        } else if (Array.isArray(dbCache) && dbCache.length > 0) {
+          cachedLeads = dbCache;
+        }
+      }
 
-      // Khi snapshot đã quá 10 phút và có API key, làm mới dữ liệu từ AccessTrade trong nền
-      if (isExpired && effectiveKey) {
+      const isExpired = !expiresAt || Date.now() > new Date(expiresAt).getTime();
+
+      if (cachedLeads && cachedLeads.length > 0) {
+        sourceLeads = cachedLeads;
+        bridgeState.syncedLeads = cachedLeads;
+
+        if (isExpired && effectiveKey) {
+          try {
+            const now = new Date();
+            const start = new Date(now.getTime() - 29 * 86400000);
+            const rawList = await getCachedTransactions(
+              formatServerYmdGmt7(start),
+              formatServerYmdGmt7(now),
+              effectiveKey
+            );
+            const freshLeads = rawList.map(normalizeServerRawTransaction);
+            if (freshLeads.length > 0) {
+              sourceLeads = freshLeads;
+              bridgeState.syncedLeads = freshLeads;
+              saveLeadsSnapshotToSupabase(freshLeads).catch(() => {});
+            }
+          } catch (_fetchErr) {}
+        }
+      } else if (effectiveKey) {
         try {
           const now = new Date();
           const start = new Date(now.getTime() - 29 * 86400000);
@@ -1780,34 +2423,12 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
             formatServerYmdGmt7(now),
             effectiveKey
           );
-          const freshLeads = rawList.map(normalizeServerRawTransaction);
-          if (freshLeads.length > 0) {
-            sourceLeads = freshLeads;
-            bridgeState.syncedLeads = freshLeads;
-            saveLeadsSnapshotToSupabase(freshLeads).catch(() => {});
+          sourceLeads = rawList.map(normalizeServerRawTransaction);
+          if (sourceLeads.length > 0) {
+            bridgeState.syncedLeads = sourceLeads;
+            saveLeadsSnapshotToSupabase(sourceLeads).catch(() => {});
           }
-        } catch (_fetchErr) {
-          // Khi AccessTrade API gặp lỗi (429 rate limit, 502, timeout),
-          // TUYỆT ĐỐI giữ nguyên dữ liệu snapshot có sẵn trên Supabase, không làm mất báo cáo của CTV
-        }
-      }
-    } else if (effectiveKey) {
-      // Chưa có snapshot trên Supabase: lấy trực tiếp từ AccessTrade và lưu snapshot
-      try {
-        const now = new Date();
-        const start = new Date(now.getTime() - 29 * 86400000);
-        const rawList = await getCachedTransactions(
-          formatServerYmdGmt7(start),
-          formatServerYmdGmt7(now),
-          effectiveKey
-        );
-        sourceLeads = rawList.map(normalizeServerRawTransaction);
-        if (sourceLeads.length > 0) {
-          bridgeState.syncedLeads = sourceLeads;
-          saveLeadsSnapshotToSupabase(sourceLeads).catch(() => {});
-        }
-      } catch (_ignoreFetchErr) {
-        // Fallback về bridgeState.syncedLeads
+        } catch (_ignoreFetchErr) {}
       }
     }
   }
@@ -1821,51 +2442,27 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
     pending: 0,
     approved: 0,
     reconciled: 0,
-    cancelled: 0,
-    commission: 0
+    cancelled: 0
   };
 
   for (const lead of sourceLeads) {
     const subs = lead && lead.subs ? lead.subs : {};
-    const subVal = String(subs[ctvField] || "").trim().toLowerCase();
-    const ctvRefLower = String(ctv.ref || "").trim().toLowerCase();
-    if (subVal !== ctvRefLower) continue;
+    const leadRefVal = loadedFromConversionsDb
+      ? String(lead.ctvRef || subs.sub2 || subs.utm_campaign || "").trim().toLowerCase()
+      : String(subs[ctvField] || subs.utm_campaign || "").trim().toLowerCase();
+    if (leadRefVal !== ctvRefLower) continue;
 
     const status = mapViewOrderStatus(lead.statusKey);
-    const campUpper = String(lead.campaignName || "").toUpperCase();
-
-    let ctvComm = 0;
-    if (status !== "cancelled") {
-      if (campUpper.includes("TNEX")) {
-        // Dự án 1: TNEX - Hoa hồng CTV 2% (Tỷ lệ AT chuẩn 2.5%)
-        ctvComm = Math.round((Number(lead.commission) || 0) * (2.0 / 2.5));
-      } else if (campUpper.includes("VPBANK") || campUpper.includes("VP BANK")) {
-        // Dự án 2: VPBank - Hoa hồng CTV 2% (Tỷ lệ AT chuẩn 2.5%)
-        ctvComm = Math.round((Number(lead.commission) || 0) * (2.0 / 2.5));
-      } else {
-        // Dự án VietCredit & mặc định: Tính theo mức rủi ro hồ sơ
-        const riskKey =
-          normalizeRiskTier(leadRisks[lead.conversionId]) ||
-          normalizeRiskTier(lead.apiRiskLevel) ||
-          defaultRisk;
-        const atRate = Number(atRates[riskKey]) > 0 ? Number(atRates[riskKey]) : DEFAULT_AT_RATES[riskKey];
-        const ctvRate = Number(ctvRates[riskKey]) >= 0 ? Number(ctvRates[riskKey]) : DEFAULT_CTV_RATES[riskKey];
-        ctvComm = Math.round((Number(lead.commission) || 0) * (ctvRate / atRate));
-      }
-    }
-
     totals.total += 1;
     totals[status] += 1;
-    if (status !== "cancelled") {
-      totals.commission += ctvComm;
-    }
 
+    const rawOrderId = String(lead.orderId || lead.conversionId || "").trim();
     orders.push({
-      id: String(lead.conversionId || ""),
+      id: rawOrderId.slice(0, 6),
       campaign: String(lead.campaignName || "Sản phẩm tài chính"),
+      order_value: Number.isFinite(Number(lead.orderValue)) ? Number(lead.orderValue) : 0,
       time: String(lead.timeRaw || ""),
-      status,
-      commission: ctvComm
+      status
     });
   }
 
@@ -2399,6 +2996,84 @@ const server = http.createServer(async (req, res) => {
       ok: true,
       hasServerKey: Boolean(ENV_ACCESSTRADE_KEY)
     });
+    return;
+  }
+
+  if (reqMethod === "GET" && pathname === "/api/conversions") {
+    try {
+      const [convResult, syncState] = await Promise.all([
+        getConversionsFromSupabase({ limit: 1000 }),
+        SUPABASE_SERVICE_ROLE_KEY ? getSyncStateRow().catch(() => null) : Promise.resolve(null)
+      ]);
+      if (!convResult) {
+        sendJson(res, 200, { ok: true, available: false, totalInSupabase: 0, rows: [], syncState });
+        return;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        available: true,
+        totalInSupabase: convResult.totalInSupabase,
+        rows: convResult.rows,
+        syncState
+      });
+    } catch (err) {
+      sendJson(res, 502, { error: err && err.message ? err.message : "Không đọc được dữ liệu Supabase conversions." });
+    }
+    return;
+  }
+
+  if (reqMethod === "POST" && pathname === "/api/conversions/sync") {
+    const auth = verifySyncSecretAuth(req, SYNC_SECRET, ["x-sync-secret", "authorization"]);
+    if (!auth.ok) {
+      sendJson(res, auth.status, { error: auth.error });
+      return;
+    }
+    let body = {};
+    try {
+      body = await readJsonBody(req, 16384);
+    } catch (_e) {}
+    const mode = body && body.mode === "backfill" ? "backfill" : "incremental";
+    const weekIndex = body && body.weekIndex != null ? body.weekIndex : 0;
+    const limit = body && body.limit != null ? body.limit : 200;
+    try {
+      const result = await runConversionsSync({ mode, source: "manual", weekIndex, limit });
+      sendJson(res, 200, result);
+    } catch (err) {
+      const status = err && err.statusCode ? err.statusCode : 502;
+      sendJson(res, status, {
+        ok: false,
+        stop: true,
+        error: err && err.message ? err.message : "Đồng bộ thất bại."
+      });
+    }
+    return;
+  }
+
+  if ((reqMethod === "GET" || reqMethod === "POST") && pathname === "/api/conversions/cron") {
+    const auth = verifySyncSecretAuth(req, CRON_SECRET, ["authorization", "x-cron-secret"]);
+    if (!auth.ok) {
+      sendJson(res, auth.status, { error: auth.error });
+      return;
+    }
+    const modeParam = parsedUrl.searchParams.get("mode") || "incremental";
+    const weekParam = parsedUrl.searchParams.get("weekIndex") || "0";
+    const limitParam = parsedUrl.searchParams.get("limit") || "200";
+    try {
+      const result = await runConversionsSync({
+        mode: modeParam === "backfill" ? "backfill" : "incremental",
+        source: "cron",
+        weekIndex: Number(weekParam) || 0,
+        limit: Number(limitParam) || 200
+      });
+      sendJson(res, 200, result);
+    } catch (err) {
+      const status = err && err.statusCode ? err.statusCode : 502;
+      sendJson(res, status, {
+        ok: false,
+        stop: true,
+        error: err && err.message ? err.message : "Đồng bộ tự động thất bại."
+      });
+    }
     return;
   }
 

@@ -1484,6 +1484,8 @@
           if (!item || typeof item !== "object") continue;
           var statusMeta = resolveStatusMeta(item.status);
           var dt = parseVietnamTime(item.time);
+          var rawOrderVal = Number(item.order_value);
+          var orderValue = Number.isFinite(rawOrderVal) && rawOrderVal >= 0 ? Math.round(rawOrderVal) : 0;
           var rawComm = Number(item.commission);
           var comm = statusMeta.key === "cancelled" || !Number.isFinite(rawComm) || rawComm < 0
             ? 0
@@ -1496,11 +1498,12 @@
           }
 
           orders.push({
-            id: item.id != null ? String(item.id).trim() : String(i + 1),
+            id: item.id != null ? String(item.id).trim().slice(0, 6) : String(i + 1),
             campaign:
               typeof item.campaign === "string" && item.campaign.trim()
                 ? item.campaign.trim()
                 : "Sản phẩm tài chính",
+            orderValue: orderValue,
             timestampMs: dt ? dt.getTime() : 0,
             dayMonth: formatVietnamDayMonth(dt),
             statusKey: statusMeta.key,
@@ -1618,14 +1621,14 @@
             commission: 1250000
           },
           orders: [
-            { id: "494045812", campaign: "Tin Vay VietCredit", time: isoDaysAgo(0, 11, 20), status: "pending", commission: 250000 },
-            { id: "494045799", campaign: "Mở tài khoản TNEX", time: isoDaysAgo(0, 9, 15), status: "approved", commission: 300000 },
-            { id: "494045787", campaign: "Tin Vay VietCredit", time: isoDaysAgo(1, 16, 40), status: "approved", commission: 250000 },
-            { id: "494045764", campaign: "Mở tài khoản MB Bank", time: isoDaysAgo(2, 14, 10), status: "reconciled", commission: 85000 },
-            { id: "494045731", campaign: "Vay tiêu dùng Shinhan", time: isoDaysAgo(3, 10, 5), status: "pending", commission: 200000 },
-            { id: "494045708", campaign: "Thẻ tín dụng VIB", time: isoDaysAgo(4, 15, 30), status: "cancelled", commission: 0 },
-            { id: "494045692", campaign: "Thẻ tín dụng TPBank EVO", time: isoDaysAgo(5, 13, 50), status: "reconciled", commission: 90000 },
-            { id: "494045655", campaign: "Mở tài khoản Cake", time: isoDaysAgo(6, 8, 45), status: "approved", commission: 75000 }
+            { id: "494045812", campaign: "Tin Vay VietCredit", order_value: 20000000, time: isoDaysAgo(0, 11, 20), status: "pending", commission: 250000 },
+            { id: "494045799", campaign: "Mở tài khoản TNEX", order_value: 15000000, time: isoDaysAgo(0, 9, 15), status: "approved", commission: 300000 },
+            { id: "494045787", campaign: "Tin Vay VietCredit", order_value: 20000000, time: isoDaysAgo(1, 16, 40), status: "approved", commission: 250000 },
+            { id: "494045764", campaign: "Mở tài khoản MB Bank", order_value: 0, time: isoDaysAgo(2, 14, 10), status: "reconciled", commission: 85000 },
+            { id: "494045731", campaign: "Vay tiêu dùng Shinhan", order_value: 30000000, time: isoDaysAgo(3, 10, 5), status: "pending", commission: 200000 },
+            { id: "494045708", campaign: "Thẻ tín dụng VIB", order_value: 0, time: isoDaysAgo(4, 15, 30), status: "cancelled", commission: 0 },
+            { id: "494045692", campaign: "Thẻ tín dụng TPBank EVO", order_value: 0, time: isoDaysAgo(5, 13, 50), status: "reconciled", commission: 90000 },
+            { id: "494045655", campaign: "Mở tài khoản Cake", order_value: 0, time: isoDaysAgo(6, 8, 45), status: "approved", commission: 75000 }
           ],
           short_link: "https://shorten.asia/maumau01",
           commission_policy: {
@@ -1792,16 +1795,12 @@
         var itemsHtml = '<ul class="order-list">';
         for (var k = 0; k < sliceEnd; k++) {
           var order = filtered[k];
-          var commClass =
-            order.statusKey === "cancelled"
-              ? "order-commission order-commission-cancelled"
-              : "order-commission";
           itemsHtml +=
             '<li class="order-item" id="order-card-' + k + '">' +
             '<button type="button" class="order-card-btn" data-order-idx="' + k + '" aria-expanded="false">' +
             '<div class="order-top">' +
             '<p class="order-campaign">' + escapeHtml(order.campaign) + '</p>' +
-            '<span class="' + commClass + '">' + escapeHtml(formatVnd(order.commission)) + '</span>' +
+            '<span class="order-meta">' + (order.orderValue > 0 ? escapeHtml(formatVnd(order.orderValue)) : "—") + '</span>' +
             '</div>' +
             '<div class="order-bottom">' +
             '<span class="order-meta">Mã ' + escapeHtml(order.id) + ' · ' + escapeHtml(order.dayMonth) + '</span>' +
@@ -1814,9 +1813,9 @@
             '<div class="order-details-drawer" id="order-drawer-' + k + '" hidden>' +
             '<div class="order-detail-row"><span class="order-detail-label">Mã đơn:</span><span class="order-detail-val">' + escapeHtml(order.id) + '</span></div>' +
             '<div class="order-detail-row"><span class="order-detail-label">Chiến dịch:</span><span class="order-detail-val">' + escapeHtml(order.campaign) + '</span></div>' +
+            '<div class="order-detail-row"><span class="order-detail-label">Giá trị đơn:</span><span class="order-detail-val">' + escapeHtml(order.orderValue > 0 ? formatVnd(order.orderValue) : "—") + '</span></div>' +
             '<div class="order-detail-row"><span class="order-detail-label">Thời gian phát sinh:</span><span class="order-detail-val">' + escapeHtml(order.dayMonth) + '</span></div>' +
             '<div class="order-detail-row"><span class="order-detail-label">Trạng thái:</span><span class="order-detail-val">' + escapeHtml(order.statusLabel) + '</span></div>' +
-            '<div class="order-detail-row"><span class="order-detail-label">Hoa hồng CTV nhận:</span><span class="order-detail-val order-detail-comm">' + escapeHtml(formatVnd(order.commission)) + '</span></div>' +
             '</div>' +
             '</li>';
         }
@@ -1888,8 +1887,7 @@
             { key: "pending", label: "Chờ duyệt", value: displayTotals.pending.toLocaleString("vi-VN"), valCls: "kpi-val-pending", cardCls: "" },
             { key: "approved", label: "Đã duyệt", value: displayTotals.approved.toLocaleString("vi-VN"), valCls: "kpi-val-approved", cardCls: "" },
             { key: "reconciled", label: "Đã đối soát", value: displayTotals.reconciled.toLocaleString("vi-VN"), valCls: "kpi-val-reconciled", cardCls: "" },
-            { key: "cancelled", label: "Đã huỷ", value: displayTotals.cancelled.toLocaleString("vi-VN"), valCls: "kpi-val-cancelled", cardCls: "" },
-            { key: "commission", label: "Hoa hồng dự kiến", value: formatVnd(displayTotals.commission), valCls: "kpi-val-commission", cardCls: "kpi-card-highlight" }
+            { key: "cancelled", label: "Đã huỷ", value: displayTotals.cancelled.toLocaleString("vi-VN"), valCls: "kpi-val-cancelled", cardCls: "" }
           ];
 
           var cards = allCards.filter(function (c) {

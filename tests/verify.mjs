@@ -1033,10 +1033,11 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     assert.equal(viewData.totals.total, 2);
     assert.equal(viewData.totals.approved, 1);
     assert.equal(viewData.totals.cancelled, 1);
-    // Low rate: 490000 * (1.8 / 2.45) = 360000; cancelled = 0
-    assert.equal(viewData.totals.commission, 360000);
+    // Commission is hidden from CTV view payload; order IDs are truncated to first 6 chars
+    assert.equal(viewData.totals.commission, undefined);
     assert.equal(viewData.orders.length, 2);
-    assert.equal(viewData.orders[1].commission, 0);
+    assert.equal(viewData.orders[0].commission, undefined);
+    assert.ok(viewData.orders[0].id.length <= 6);
 
     // Retired or unknown view codes return 404 with bridge header
     const retiredRes = await fetch(`http://127.0.0.1:${serverPort}/api/view/lanviewcode12345678901`);

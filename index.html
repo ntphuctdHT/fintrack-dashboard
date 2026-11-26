@@ -1679,6 +1679,103 @@
       border-color: var(--color-primary);
     }
 
+    /* Khối đồng bộ Supabase & bảng 5 cột */
+    .sync-conversions-card {
+      padding: var(--space-3) var(--space-4);
+      margin-bottom: var(--space-3);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .sync-conversions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      align-items: center;
+    }
+
+    .sync-conversions-row .select-input,
+    .sync-conversions-row .text-input {
+      flex: 1 1 180px;
+      min-height: 40px;
+    }
+
+    .conversions-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .conversions-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--text-sm);
+      min-width: 720px;
+    }
+
+    .conversions-table th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: var(--text-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--color-text-muted);
+      border-bottom: 1px solid var(--color-border-strong);
+      background-color: var(--color-bg);
+      white-space: nowrap;
+    }
+
+    .conversions-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--color-border);
+      vertical-align: top;
+      color: var(--color-text);
+    }
+
+    .conversions-row-main:hover td {
+      background-color: var(--color-bg);
+    }
+
+    .conversions-cell-title {
+      font-weight: 700;
+      color: var(--color-text);
+      margin: 0 0 2px;
+    }
+
+    .conversions-cell-sub {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .conversions-cell-num {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .conversions-editor-cell {
+      padding: 8px 12px !important;
+      background-color: var(--color-bg);
+    }
+
+    .btn-inline-risk {
+      margin-top: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 999px;
+      border: 1px solid var(--color-border-strong);
+      background: var(--color-surface);
+      color: var(--color-primary-text);
+      cursor: pointer;
+    }
+
     /* Hệ thống thông báo nổi Toast */
     .toast-container {
       position: fixed;
@@ -2317,7 +2414,30 @@
               <span class="stat-label">Phần của tôi</span>
               <strong class="stat-val stat-val-highlight" id="orders-stat-owner">0 đ</strong>
             </div>
+            <div class="orders-stat-item">
+              <span class="stat-label">Tổng số hồ sơ trong Supabase</span>
+              <strong class="stat-val" id="orders-stat-supabase">0</strong>
+            </div>
           </div>
+
+          <section class="card sync-conversions-card" id="sync-conversions-panel" aria-labelledby="sync-panel-title">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <strong id="sync-panel-title" style="font-size:var(--text-sm);">🔄 Đồng bộ AccessTrade → Supabase</strong>
+              <span id="sync-last-state-meta" style="font-size:var(--text-xs);color:var(--color-text-muted);"></span>
+            </div>
+            <div class="sync-conversions-row">
+              <select class="select-input" id="select-sync-mode" aria-label="Chế độ đồng bộ">
+                <option value="incremental">Gia tăng (48 giờ gần nhất)</option>
+                <option value="backfill">Đồng bộ bù (60 ngày theo từng tuần)</option>
+              </select>
+              <input class="text-input" id="input-sync-secret" type="password" autocomplete="off"
+                placeholder="Nhập mã bí mật đồng bộ (chỉ lưu tạm trong phiên)" aria-label="Mã bí mật đồng bộ" />
+              <button type="button" class="primary-btn" id="btn-sync-conversions-now" style="width:auto;min-width:160px;min-height:40px;padding:8px 16px;">
+                🔄 Đồng bộ ngay
+              </button>
+            </div>
+            <div id="sync-conversions-feedback" role="status" aria-live="polite" hidden></div>
+          </section>
 
           <section class="card settings-form" id="export-ctv-card" aria-labelledby="export-ctv-heading">
             <details class="advanced-details" style="border:none;padding:0;background:transparent;">
@@ -3185,6 +3305,7 @@
       var CTV_SHORT_LINKS_STORAGE_KEY = "dasboard_fin_ctv_short_links_v1";
       var CTV_BADGES_STORAGE_KEY = "dasboard_fin_ctv_badges_v1";
       var CTV_EXTRA_STATS_STORAGE_KEY = "dasboard_fin_ctv_extra_stats_v1";
+      var SYNC_SECRET_SESSION_KEY = "dasboard_fin_sync_secret_session";
       var VALID_SALES_LINK_MODES = ["short_auto", "short_isgd", "short_accesstrade", "full"];
       var CTV_CHARSET = "abcdefghjkmnpqrstuvwxyz23456789";
       var DEFAULT_AT_RATES = { low: 2.45, medium: 1.93, high: 1.58 };
@@ -3242,6 +3363,9 @@
         usingFallbackDemo: false,
         errorMessage: "",
         lastUpdated: null,
+        totalInSupabase: 0,
+        syncState: null,
+        syncRunning: false,
         leads: []
       };
 
@@ -3444,9 +3568,13 @@
 
       function getLeadCtvCode(lead, ctvField) {
         var field = normalizeCtvField(ctvField);
-        if (!lead || !lead.subs) return "";
-        var val = lead.subs[field];
-        return val && val !== "—" ? String(val).trim() : "";
+        if (!lead) return "";
+        if (lead.subs) {
+          var val = lead.subs[field];
+          if (val && val !== "—") return String(val).trim();
+          if (field === "sub2" && lead.subs.utm_campaign) return String(lead.subs.utm_campaign).trim();
+        }
+        return lead.ctvRef ? String(lead.ctvRef).trim() : "";
       }
 
       function computeLeadSplit(lead, policy) {
@@ -3498,30 +3626,52 @@
               ? String(item.id)
               : "HS-" + (index + 1);
 
+        var orderId =
+          item.order_id != null && item.order_id !== ""
+            ? String(item.order_id)
+            : item.transaction_id != null && item.transaction_id !== ""
+              ? String(item.transaction_id)
+              : conversionId;
+
+        var rawOrderVal =
+          item.order_value != null && item.order_value !== ""
+            ? Number(item.order_value)
+            : item.transaction_value != null && item.transaction_value !== ""
+              ? Number(item.transaction_value)
+              : Number(item.billing);
+        var orderValue = Number.isFinite(rawOrderVal) ? Math.round(rawOrderVal) : 0;
+
         var campaignName =
+          item.advertiser ||
           item.merchant ||
           item.campaign_name ||
           (item.campaign_id != null && item.campaign_id !== ""
             ? "Chiến dịch #" + item.campaign_id
             : "Chiến dịch tài chính");
 
-        var timeRaw = item.transaction_time || item.sales_time || item.click_time || "";
+        var timeRaw = item.sales_time || item.transaction_time || item.click_time || item.update_time || "";
         var parsedTime = parseVietnamTime(timeRaw);
         var commission = Number(item.commission);
         if (!Number.isFinite(commission)) commission = 0;
 
         var statusInfo = resolveLeadStatus(item.status, item.is_confirmed);
         var extra = item._extra && typeof item._extra === "object" ? item._extra : {};
-        function pickSub(primary, fallback) {
+        var trackingObj = item.tracking && typeof item.tracking === "object" ? item.tracking : {};
+        var extraParams = extra.parameters && typeof extra.parameters === "object" ? extra.parameters : {};
+        function pickSub(primary, fallback, trackFallback) {
           if (primary != null && String(primary).trim() !== "") return String(primary).trim();
           if (fallback != null && String(fallback).trim() !== "") return String(fallback).trim();
+          if (trackFallback != null && String(trackFallback).trim() !== "") return String(trackFallback).trim();
           return "";
         }
+        var utmCampaign = pickSub(item.utm_campaign, extra.utm_campaign, trackingObj.utm_campaign || extraParams.utm_campaign);
+        var sub2Val = pickSub(item.sub2, extra.sub2, trackingObj.sub2 || extraParams.sub2);
         var subs = {
-          sub1: pickSub(item.sub1, extra.sub1),
-          sub2: pickSub(item.sub2, extra.sub2),
-          sub3: pickSub(item.sub3, extra.sub3),
-          sub4: pickSub(item.sub4, extra.sub4)
+          sub1: pickSub(item.sub1, extra.sub1, trackingObj.sub1),
+          sub2: sub2Val,
+          sub3: pickSub(item.sub3, extra.sub3, trackingObj.sub3),
+          sub4: pickSub(item.sub4, extra.sub4, trackingObj.sub4),
+          utm_campaign: utmCampaign
         };
 
         var apiRiskLevel =
@@ -3529,11 +3679,20 @@
           normalizeRiskLevel(item.risk) ||
           normalizeRiskLevel(item.risk_tier);
 
+        var ctvRefVal = item.ctv_ref
+          ? String(item.ctv_ref).trim().toLowerCase()
+          : (sub2Val || utmCampaign || "").trim().toLowerCase();
+
         return {
           conversionId: conversionId,
+          orderId: orderId,
+          orderValue: orderValue,
           campaignName: String(campaignName),
           sub1: subs.sub1 || "—",
           subs: subs,
+          ctvRef: ctvRefVal,
+          ctvSource: typeof item.ctv_source === "string" ? item.ctv_source : (sub2Val ? "sub2" : (utmCampaign ? "utm_campaign" : "none")),
+          ctvConflict: Boolean(item.ctv_conflict),
           timeRaw: String(timeRaw),
           timestampMs: parsedTime ? parsedTime.getTime() : 0,
           dateKey: parsedTime ? toVietnamDateKey(parsedTime) : "",
@@ -5481,11 +5640,203 @@
         }
       }
 
+      function getSessionSyncSecret() {
+        try {
+          if (typeof window !== "undefined" && window.sessionStorage) {
+            return window.sessionStorage.getItem(SYNC_SECRET_SESSION_KEY) || "";
+          }
+        } catch (_e) {}
+        return "";
+      }
+
+      function setSessionSyncSecret(val) {
+        try {
+          if (typeof window !== "undefined" && window.sessionStorage) {
+            if (val) {
+              window.sessionStorage.setItem(SYNC_SECRET_SESSION_KEY, val);
+            } else {
+              window.sessionStorage.removeItem(SYNC_SECRET_SESSION_KEY);
+            }
+          }
+        } catch (_e) {}
+      }
+
+      function renderSyncPanelMeta() {
+        var metaEl = document.getElementById("sync-last-state-meta");
+        var supaEl = document.getElementById("orders-stat-supabase");
+        if (supaEl) {
+          supaEl.textContent = (Number(state.totalInSupabase) || 0).toLocaleString("vi-VN");
+        }
+        if (!metaEl) return;
+        var st = state.syncState;
+        if (!st || typeof st !== "object") {
+          metaEl.textContent = "";
+          return;
+        }
+        var parts = [];
+        if (st.last_sync_at) {
+          var dt = parseVietnamTime(st.last_sync_at);
+          if (dt) parts.push("Đồng bộ gần nhất: " + formatVietnamDateTime(dt));
+        }
+        if (st.last_mode) {
+          parts.push(st.last_mode === "backfill" ? "Chế độ bù 60 ngày" : "Gia tăng 48h");
+        }
+        if (st.last_status === "error" && st.last_error) {
+          parts.push("Lỗi: " + st.last_error);
+        }
+        metaEl.textContent = parts.join(" · ");
+      }
+
+      async function loadConversionsFromSupabase() {
+        try {
+          var proto = window.location && window.location.protocol;
+          if (proto !== "http:" && proto !== "https:") return null;
+          var baseUrl = state.serverUrl ? state.serverUrl.replace(/\/+$/, "") : window.location.origin;
+          var res = await window.fetch(baseUrl + "/api/conversions", {
+            method: "GET",
+            cache: "no-store",
+            headers: { Accept: "application/json" }
+          });
+          if (!res || !res.ok) return null;
+          var payload = await res.json().catch(function () { return null; });
+          if (!payload || !payload.ok) return null;
+          state.totalInSupabase = Number(payload.totalInSupabase) || 0;
+          state.syncState = payload.syncState || null;
+          renderSyncPanelMeta();
+          return payload;
+        } catch (_err) {
+          return null;
+        }
+      }
+
+      async function runManualConversionsSync() {
+        if (state.syncRunning) return;
+        var secretInput = document.getElementById("input-sync-secret");
+        var modeSelect = document.getElementById("select-sync-mode");
+        var syncBtn = document.getElementById("btn-sync-conversions-now");
+
+        var secretVal = secretInput ? secretInput.value.trim() : getSessionSyncSecret();
+        if (!secretVal) {
+          showFeedbackBox("sync-conversions-feedback", "warning", "Vui lòng nhập Mã bí mật đồng bộ (SYNC_SECRET) trước khi chạy.");
+          showToast("warning", "Vui lòng nhập mã bí mật đồng bộ.");
+          if (secretInput) secretInput.focus();
+          return;
+        }
+        setSessionSyncSecret(secretVal);
+
+        var syncMode = modeSelect && modeSelect.value === "backfill" ? "backfill" : "incremental";
+        var baseUrl = state.serverUrl ? state.serverUrl.replace(/\/+$/, "") : window.location.origin;
+        var endpoint = baseUrl + "/api/conversions/sync";
+
+        state.syncRunning = true;
+        if (syncBtn) {
+          syncBtn.disabled = true;
+          syncBtn.textContent = "⏳ Đang đồng bộ...";
+        }
+
+        try {
+          if (syncMode === "incremental") {
+            showFeedbackBox("sync-conversions-feedback", "warning", "Đang đồng bộ gia tăng (48 giờ gần nhất) từ AccessTrade → Supabase...");
+            var resp = await window.fetch(endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Sync-Secret": secretVal
+              },
+              body: JSON.stringify({ mode: "incremental" })
+            });
+            var json = await resp.json().catch(function () { return null; });
+            if (!resp.ok || !json || !json.ok) {
+              var msg = (json && json.error) ? json.error : "Đồng bộ thất bại (HTTP " + resp.status + ").";
+              if (resp.status === 401 || resp.status === 429) {
+                setSessionSyncSecret("");
+                if (secretInput) secretInput.value = "";
+              }
+              showFeedbackBox("sync-conversions-feedback", "error", msg);
+              showToast("error", msg);
+              return;
+            }
+            var dbRes = await loadConversionsFromSupabase();
+            if (dbRes && Array.isArray(dbRes.rows)) {
+              state.leads = normalizeAndSortLeads(dbRes.rows);
+              render();
+            }
+            showFeedbackBox("sync-conversions-feedback", "success", "Đồng bộ gia tăng hoàn tất: đã cập nhật " + (json.upsertedCount || 0) + " hồ sơ. Tổng trong Supabase: " + state.totalInSupabase + ".");
+            showToast("success", "Đã đồng bộ xong vào Supabase!");
+          } else {
+            var weekIdx = 0;
+            var totalSynced = 0;
+            var keepGoing = true;
+            while (keepGoing) {
+              showFeedbackBox("sync-conversions-feedback", "warning", "Đang đồng bộ bù tuần " + (weekIdx + 1) + " / 9 (60 ngày gần nhất)...");
+              var bfResp = await window.fetch(endpoint, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Sync-Secret": secretVal
+                },
+                body: JSON.stringify({ mode: "backfill", weekIndex: weekIdx })
+              });
+              var bfJson = await bfResp.json().catch(function () { return null; });
+              if (!bfResp.ok || !bfJson || !bfJson.ok || bfJson.stop) {
+                var bfErr = (bfJson && bfJson.error) ? bfJson.error : "Tuần " + (weekIdx + 1) + " bị lỗi (HTTP " + bfResp.status + "). Đã dừng để tránh lặp vô hạn.";
+                if (bfResp.status === 401 || bfResp.status === 429) {
+                  setSessionSyncSecret("");
+                  if (secretInput) secretInput.value = "";
+                }
+                showFeedbackBox("sync-conversions-feedback", "error", bfErr);
+                showToast("error", bfErr);
+                await loadConversionsFromSupabase();
+                return;
+              }
+              totalSynced += Number(bfJson.upsertedCount) || 0;
+              var partialDb = await loadConversionsFromSupabase();
+              if (partialDb && Array.isArray(partialDb.rows) && partialDb.rows.length > 0) {
+                state.leads = normalizeAndSortLeads(partialDb.rows);
+                render();
+              }
+              if (bfJson.hasMore && bfJson.nextWeekIndex != null) {
+                weekIdx = Number(bfJson.nextWeekIndex);
+              } else {
+                keepGoing = false;
+              }
+            }
+            showFeedbackBox("sync-conversions-feedback", "success", "Đồng bộ bù 60 ngày hoàn tất (" + totalSynced + " hồ sơ). Tổng trong Supabase: " + state.totalInSupabase + ".");
+            showToast("success", "Đồng bộ bù 60 ngày thành công!");
+          }
+        } catch (err) {
+          var netMsg = err && err.message ? err.message : "Lỗi kết nối khi đồng bộ.";
+          showFeedbackBox("sync-conversions-feedback", "error", netMsg);
+          showToast("error", netMsg);
+        } finally {
+          state.syncRunning = false;
+          if (syncBtn) {
+            syncBtn.disabled = false;
+            syncBtn.textContent = "🔄 Đồng bộ ngay";
+          }
+        }
+      }
+
       async function loadData(options) {
         var fromSettingsSave = Boolean(options && options.fromSettingsSave);
         state.loading = true;
         state.errorMessage = "";
         render();
+
+        // Thử đọc dữ liệu hồ sơ đã đồng bộ từ bảng public.conversions trên Supabase trước
+        if (state.mode === "real" && !fromSettingsSave) {
+          var dbPayload = await loadConversionsFromSupabase();
+          if (dbPayload && dbPayload.available && Array.isArray(dbPayload.rows) && dbPayload.rows.length > 0) {
+            state.leads = normalizeAndSortLeads(dbPayload.rows);
+            state.loading = false;
+            state.usingFallbackDemo = false;
+            state.errorMessage = "";
+            state.lastUpdated = new Date();
+            render();
+            syncCtvBridgeToServer();
+            return { ok: true };
+          }
+        }
 
         if (!state.accessKey) {
           state.leads = [];
@@ -6043,6 +6394,13 @@
           state.leads.length.toLocaleString("vi-VN") +
           " hồ sơ · Mới nhất ở trên";
 
+        var policy = {
+          atRates: state.atRates,
+          ctvRates: state.ctvRates,
+          defaultRisk: state.defaultRisk,
+          leadRisks: state.leadRisks
+        };
+
         // Calculate metrics for orders summary bar
         var statApproved = 0;
         var statPending = 0;
@@ -6071,6 +6429,7 @@
         var elRev = document.getElementById("orders-stat-revenue");
         var elCtv = document.getElementById("orders-stat-ctv");
         var elOwner = document.getElementById("orders-stat-owner");
+        var elSupa = document.getElementById("orders-stat-supabase");
 
         if (elTotal) elTotal.textContent = filtered.length.toLocaleString("vi-VN");
         if (elApp) elApp.textContent = statApproved.toLocaleString("vi-VN");
@@ -6078,6 +6437,8 @@
         if (elRev) elRev.textContent = formatVnd(statRevTotal);
         if (elCtv) elCtv.textContent = formatVnd(statCtvTotal);
         if (elOwner) elOwner.textContent = formatVnd(statOwnerTotal);
+        if (elSupa) elSupa.textContent = (Number(state.totalInSupabase) || 0).toLocaleString("vi-VN");
+        renderSyncPanelMeta();
 
         if (filtered.length === 0) {
           container.innerHTML =
@@ -6085,14 +6446,15 @@
           return;
         }
 
-        var policy = {
-          atRates: state.atRates,
-          ctvRates: state.ctvRates,
-          defaultRisk: state.defaultRisk,
-          leadRisks: state.leadRisks
-        };
+        var html = '<div class="conversions-table-wrap"><table class="conversions-table" aria-label="Bảng hồ sơ giao dịch 5 cột">' +
+          '<thead><tr>' +
+          '<th>Sales time</th>' +
+          '<th>Order ID</th>' +
+          '<th>Order value</th>' +
+          '<th>Advertiser</th>' +
+          '<th>Commission</th>' +
+          '</tr></thead><tbody>';
 
-        var html = '<ul class="lead-list">';
         for (var j = 0; j < filtered.length; j++) {
           var item = filtered[j];
           var split = computeLeadSplit(item, policy);
@@ -6103,88 +6465,43 @@
             ? "lead-commission lead-commission-cancelled"
             : "lead-commission";
 
-          var matchedCtv = findCtvByRef(item.subs && item.subs.sub2, state.ctvList);
-          var metaParts = ["Mã " + item.conversionId];
-          if (matchedCtv) {
-            metaParts.push("CTV " + matchedCtv.name);
-            if (!matchedCtv.active) metaParts.push("Đã nghỉ");
-            if (ctvCode && ctvCode !== matchedCtv.ref) {
-              metaParts.push(ctvCode);
-            }
-          } else {
-            metaParts.push("CTV: " + (ctvCode || "Chưa gán"));
-          }
-          if (state.ctvField !== "sub1" && item.sub1 && item.sub1 !== "—") {
-            metaParts.push(item.sub1);
-          }
+          var matchedCtv = findCtvByRef(ctvCode || (item.subs && item.subs.sub2), state.ctvList);
+          var ctvBadgeText = matchedCtv
+            ? ("CTV " + matchedCtv.name + (!matchedCtv.active ? " (Đã nghỉ)" : ""))
+            : ("CTV: " + (ctvCode || "Chưa gán"));
 
+          var trackingTags = [];
+          if (item.subs && item.subs.sub2) trackingTags.push("sub2: " + item.subs.sub2);
+          if (item.subs && item.subs.utm_campaign) trackingTags.push("utm_campaign: " + item.subs.utm_campaign);
+          var trackingNote = trackingTags.length > 0 ? trackingTags.join(" · ") : (item.sub1 && item.sub1 !== "—" ? item.sub1 : "");
           var isTnex = Boolean(item.campaignName && item.campaignName.toUpperCase().indexOf("TNEX") !== -1);
 
           html +=
-            '<li class="lead-row">' +
-            '<button type="button" class="lead-row-btn"' +
-            (!isTnex ? ' data-toggle-lead="' + escapeHtml(item.conversionId) + '"' : "") +
-            ' aria-expanded="' +
-            (isEditing && !isTnex ? "true" : "false") +
-            '">' +
-            '<div class="lead-top">' +
-            '<p class="lead-campaign">' +
-            escapeHtml(item.campaignName) +
-            "</p>" +
-            '<span class="' +
-            commClass +
-            '">' +
-            escapeHtml(formatVnd(item.commission)) +
-            "</span>" +
-            "</div>" +
-            '<div class="lead-meta">' +
-            escapeHtml(metaParts.join(" · ")) +
-            "</div>" +
-            '<div class="lead-finance-grid">' +
-            '<div class="lead-fin-item">' +
-            '<span class="lead-fin-label">Thực tế (AccessTrade)</span>' +
-            '<span class="lead-fin-val">' +
-            escapeHtml(formatVnd(item.commission)) +
-            "</span>" +
-            "</div>" +
-            '<div class="lead-fin-item">' +
-            '<span class="lead-fin-label">Hoa hồng CTV</span>' +
-            '<span class="lead-fin-val lead-fin-ctv">' +
-            escapeHtml(formatVnd(split.ctvCommission)) +
-            "</span>" +
-            "</div>" +
-            '<div class="lead-fin-item-full">' +
-            '<span class="lead-fin-label">Phần của tôi (Thực tế − CTV)' +
-            (isCancelled ? " · Đã huỷ" : "") +
-            "</span>" +
-            '<span class="lead-fin-val lead-fin-owner">' +
-            escapeHtml(formatVnd(split.ownerShare)) +
-            "</span>" +
-            "</div>" +
-            "</div>" +
-            '<div class="lead-bottom">' +
-            '<span class="lead-time">' +
-            escapeHtml(item.displayTime) +
-            "</span>" +
-            '<div class="lead-badges">' +
+            '<tr class="conversions-row-main">' +
+            '<td><div class="conversions-cell-title">' + escapeHtml(item.displayTime || "—") + '</div>' +
+            '<div class="conversions-cell-sub"><span class="status-label ' + item.statusInfo.cssClass + '">' + escapeHtml(item.statusInfo.fullLabel) + '</span></div></td>' +
+            '<td><div class="conversions-cell-title" style="font-family:monospace;">' + escapeHtml(item.orderId || item.conversionId) + '</div>' +
+            '<div class="conversions-cell-sub">Conv #' + escapeHtml(item.conversionId) + '</div></td>' +
+            '<td class="conversions-cell-num">' + escapeHtml(formatVnd(item.orderValue || 0)) + '</td>' +
+            '<td><div class="conversions-cell-title">' + escapeHtml(item.campaignName) + '</div>' +
+            '<div class="conversions-cell-sub"><span>' + escapeHtml(ctvBadgeText) + '</span>' +
+            (trackingNote ? '<span>· ' + escapeHtml(trackingNote) + '</span>' : '') +
+            (item.ctvConflict ? '<span class="status-label status-cancelled">⚠ Lệch mã</span>' : '') +
+            '</div></td>' +
+            '<td><div class="' + commClass + '">' + escapeHtml(formatVnd(item.commission)) + '</div>' +
+            '<div class="conversions-cell-sub"><span>CTV: ' + escapeHtml(formatVnd(split.ctvCommission)) + '</span> · <span>Tôi: ' + escapeHtml(formatVnd(split.ownerShare)) + '</span></div>' +
             (!isTnex
-              ? '<span class="status-label ' + split.riskMeta.cssClass + '">' + escapeHtml(split.riskMeta.icon + " " + split.riskMeta.label) + "</span>"
-              : "") +
-            '<span class="status-label ' +
-            item.statusInfo.cssClass +
-            '">' +
-            escapeHtml(item.statusInfo.fullLabel) +
-            "</span>" +
-            "</div>" +
-            "</div>" +
-            '<span class="lead-edit-hint">' +
-            (isTnex ? "Hoa hồng cố định (2.0%)" : (isEditing ? "Đang mở khung chỉnh mức rủi ro" : "Chạm để chỉnh mức rủi ro")) +
-            "</span>" +
-            "</button>";
+              ? '<div class="conversions-cell-sub"><span class="status-label ' + split.riskMeta.cssClass + '">' + escapeHtml(split.riskMeta.icon + " " + split.riskMeta.label) + '</span>' +
+                '<button type="button" class="btn-inline-risk" data-toggle-lead="' + escapeHtml(item.conversionId) + '" aria-expanded="' + (isEditing ? "true" : "false") + '">' +
+                (isEditing ? "Đóng chỉnh rủi ro" : "Chỉnh rủi ro") + '</button></div>'
+              : '<div class="conversions-cell-sub"><span>Hoa hồng cố định (2.0%)</span></div>') +
+            '</td>' +
+            '</tr>';
 
           if (isEditing && !isTnex) {
             var editorIdRisk = "edit-risk-" + j;
             html +=
+              '<tr><td colspan="5" class="conversions-editor-cell">' +
               '<form class="lead-editor" data-lead-form="' +
               escapeHtml(item.conversionId) +
               '">' +
@@ -6222,12 +6539,10 @@
               '<button type="submit" class="primary-btn">Lưu mức rủi ro</button>' +
               '<button type="button" class="secondary-btn" data-cancel-lead>Đóng</button>' +
               "</div>" +
-              "</form>";
+              "</form></td></tr>";
           }
-
-          html += "</li>";
         }
-        html += "</ul>";
+        html += "</tbody></table></div>";
         container.innerHTML = html;
 
         var toggleBtns = container.querySelectorAll("[data-toggle-lead]");
@@ -7333,6 +7648,22 @@
         if (csvBtn) {
           csvBtn.addEventListener("click", function () {
             exportLeadsToCsv();
+          });
+        }
+
+        var syncSecretEl = document.getElementById("input-sync-secret");
+        if (syncSecretEl) {
+          var existingSessionSecret = getSessionSyncSecret();
+          if (existingSessionSecret) syncSecretEl.value = existingSessionSecret;
+          syncSecretEl.addEventListener("input", function () {
+            setSessionSyncSecret(syncSecretEl.value.trim());
+          });
+        }
+
+        var syncNowBtn = document.getElementById("btn-sync-conversions-now");
+        if (syncNowBtn) {
+          syncNowBtn.addEventListener("click", function () {
+            runManualConversionsSync();
           });
         }
 
