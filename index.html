@@ -2426,12 +2426,8 @@
               <span id="sync-last-state-meta" style="font-size:var(--text-xs);color:var(--color-text-muted);"></span>
             </div>
             <div class="sync-conversions-row">
-              <select class="select-input" id="select-sync-mode" aria-label="Chế độ đồng bộ">
-                <option value="incremental">Gia tăng (48 giờ gần nhất)</option>
-                <option value="backfill">Đồng bộ bù (60 ngày theo từng tuần)</option>
-              </select>
               <input class="text-input" id="input-sync-secret" type="password" autocomplete="off"
-                placeholder="Nhập mã bí mật đồng bộ (chỉ lưu tạm trong phiên)" aria-label="Mã bí mật đồng bộ" />
+                placeholder="Nhập mã bí mật đồng bộ để bật tự động mỗi 10 phút (lưu trong phiên)" aria-label="Mã bí mật đồng bộ" />
               <button type="button" class="primary-btn" id="btn-sync-conversions-now" style="width:auto;min-width:160px;min-height:40px;padding:8px 16px;">
                 🔄 Đồng bộ ngay
               </button>
@@ -3306,6 +3302,7 @@
       var CTV_BADGES_STORAGE_KEY = "dasboard_fin_ctv_badges_v1";
       var CTV_EXTRA_STATS_STORAGE_KEY = "dasboard_fin_ctv_extra_stats_v1";
       var SYNC_SECRET_SESSION_KEY = "dasboard_fin_sync_secret_session";
+      var SYNC_POLL_INTERVAL_MS = 10 * 60 * 1000;
       var VALID_SALES_LINK_MODES = ["short_auto", "short_isgd", "short_accesstrade", "full"];
       var CTV_CHARSET = "abcdefghjkmnpqrstuvwxyz23456789";
       var DEFAULT_AT_RATES = { low: 2.45, medium: 1.93, high: 1.58 };
@@ -3366,6 +3363,9 @@
         totalInSupabase: 0,
         syncState: null,
         syncRunning: false,
+        syncPollTimerId: null,
+        syncAutoStatusText: "",
+        autoSyncInitialDone: false,
         leads: []
       };
 
@@ -5668,21 +5668,25 @@
           supaEl.textContent = (Number(state.totalInSupabase) || 0).toLocaleString("vi-VN");
         }
         if (!metaEl) return;
-        var st = state.syncState;
-        if (!st || typeof st !== "object") {
-          metaEl.textContent = "";
+        if (state.syncAutoStatusText) {
+          metaEl.textContent = state.syncAutoStatusText;
           return;
         }
+        var st = state.syncState;
         var parts = [];
-        if (st.last_sync_at) {
-          var dt = parseVietnamTime(st.last_sync_at);
-          if (dt) parts.push("Đồng bộ gần nhất: " + formatVietnamDateTime(dt));
+        if (st && typeof st === "object") {
+          if (st.last_sync_at) {
+            var dt = parseVietnamTime(st.last_sync_at);
+            if (dt) parts.push("Cập nhật lúc " + formatVietnamDateTime(dt));
+          }
+          if (st.last_status === "error" && st.last_error) {
+            parts.push("Lỗi: " + st.last_error);
+          }
         }
-        if (st.last_mode) {
-          parts.push(st.last_mode === "backfill" ? "Chế độ bù 60 ngày" : "Gia tăng 48h");
-        }
-        if (st.last_status === "error" && st.last_error) {
-          parts.push("Lỗi: " + st.last_error);
+        if (getSessionSyncSecret()) {
+          parts.push("Tự động mỗi 10 phút");
+        } else {
+          parts.push("Chưa bật tự động (cần SYNC_SECRET)");
         }
         metaEl.textContent = parts.join(" · ");
       }
@@ -5709,111 +5713,204 @@
         }
       }
 
-      async function runManualConversionsSync() {
-        if (state.syncRunning) return;
-        var secretInput = document.getElementById("input-sync-secret");
-        var modeSelect = document.getElementById("select-sync-mode");
-        var syncBtn = document.getElementById("btn-sync-conversions-now");
+      function resolveSmartSyncMode() {
+        if (Number(state.totalInSupabase) <= 0) {
+          return "backfill";
+        }
+        return "incremental";
+      }
 
-        var secretVal = secretInput ? secretInput.value.trim() : getSessionSyncSecret();
+      async function postConversionsSyncStep(endpoint, secretVal, bodyPayload) {
+        var resp = await window.fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Sync-Secret": secretVal
+          },
+          body: JSON.stringify(bodyPayload)
+        });
+        var json = await resp.json().catch(function () { return null; });
+        return { resp: resp, json: json };
+      }
+
+      function handleSyncFailure(status, msg, silent, secretInput) {
+        if (status === 401) {
+          setSessionSyncSecret("");
+          if (secretInput) secretInput.value = "";
+        }
+        if (silent) {
+          if (typeof console !== "undefined" && console.warn) {
+            console.warn("[Auto-Sync] Đồng bộ ngầm thất bại:", msg);
+          }
+          state.syncAutoStatusText = status === 401
+            ? "SYNC_SECRET không đúng — nhập lại để bật tự động"
+            : "";
+          renderSyncPanelMeta();
+          return;
+        }
+        if (status === 429) {
+          setSessionSyncSecret("");
+          if (secretInput) secretInput.value = "";
+        }
+        showFeedbackBox("sync-conversions-feedback", "error", msg);
+        showToast("error", msg);
+      }
+
+      async function runConversionsSync(options) {
+        if (state.syncRunning) return { ok: false, skipped: true };
+        var silent = Boolean(options && options.silent);
+        var proto = window.location && window.location.protocol;
+        if (proto !== "http:" && proto !== "https:") return { ok: false, skipped: true };
+        if (silent && state.mode === "demo") return { ok: false, skipped: true };
+
+        var secretInput = document.getElementById("input-sync-secret");
+        var syncBtn = document.getElementById("btn-sync-conversions-now");
+        var secretVal = (secretInput && secretInput.value ? secretInput.value.trim() : "") || getSessionSyncSecret();
+
         if (!secretVal) {
+          if (silent) {
+            state.syncAutoStatusText = "Nhập SYNC_SECRET để bật đồng bộ tự động mỗi 10 phút";
+            renderSyncPanelMeta();
+            return { ok: false, skipped: true };
+          }
           showFeedbackBox("sync-conversions-feedback", "warning", "Vui lòng nhập Mã bí mật đồng bộ (SYNC_SECRET) trước khi chạy.");
           showToast("warning", "Vui lòng nhập mã bí mật đồng bộ.");
           if (secretInput) secretInput.focus();
-          return;
+          return { ok: false };
         }
         setSessionSyncSecret(secretVal);
 
-        var syncMode = modeSelect && modeSelect.value === "backfill" ? "backfill" : "incremental";
+        var syncMode = (options && options.forceMode) || resolveSmartSyncMode();
         var baseUrl = state.serverUrl ? state.serverUrl.replace(/\/+$/, "") : window.location.origin;
         var endpoint = baseUrl + "/api/conversions/sync";
 
         state.syncRunning = true;
-        if (syncBtn) {
+        state.syncAutoStatusText = "🔄 Đang cập nhật từ AccessTrade...";
+        renderSyncPanelMeta();
+        if (syncBtn && !silent) {
           syncBtn.disabled = true;
           syncBtn.textContent = "⏳ Đang đồng bộ...";
         }
 
         try {
           if (syncMode === "incremental") {
-            showFeedbackBox("sync-conversions-feedback", "warning", "Đang đồng bộ gia tăng (48 giờ gần nhất) từ AccessTrade → Supabase...");
-            var resp = await window.fetch(endpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Sync-Secret": secretVal
-              },
-              body: JSON.stringify({ mode: "incremental" })
-            });
-            var json = await resp.json().catch(function () { return null; });
-            if (!resp.ok || !json || !json.ok) {
-              var msg = (json && json.error) ? json.error : "Đồng bộ thất bại (HTTP " + resp.status + ").";
-              if (resp.status === 401 || resp.status === 429) {
-                setSessionSyncSecret("");
-                if (secretInput) secretInput.value = "";
-              }
-              showFeedbackBox("sync-conversions-feedback", "error", msg);
-              showToast("error", msg);
-              return;
+            if (!silent) {
+              showFeedbackBox("sync-conversions-feedback", "warning", "Đang đồng bộ dữ liệu mới nhất (48 giờ gần nhất) từ AccessTrade → Supabase...");
+            }
+            var step = await postConversionsSyncStep(endpoint, secretVal, { mode: "incremental" });
+            if (!step.resp.ok || !step.json || !step.json.ok) {
+              var msg = (step.json && step.json.error) ? step.json.error : "Đồng bộ thất bại (HTTP " + step.resp.status + ").";
+              handleSyncFailure(step.resp.status, msg, silent, secretInput);
+              return { ok: false };
             }
             var dbRes = await loadConversionsFromSupabase();
             if (dbRes && Array.isArray(dbRes.rows)) {
               state.leads = normalizeAndSortLeads(dbRes.rows);
+              state.lastUpdated = new Date();
               render();
+              syncCtvBridgeToServer();
             }
-            showFeedbackBox("sync-conversions-feedback", "success", "Đồng bộ gia tăng hoàn tất: đã cập nhật " + (json.upsertedCount || 0) + " hồ sơ. Tổng trong Supabase: " + state.totalInSupabase + ".");
-            showToast("success", "Đã đồng bộ xong vào Supabase!");
+            state.syncAutoStatusText = "";
+            renderSyncPanelMeta();
+            if (!silent) {
+              showFeedbackBox("sync-conversions-feedback", "success", "Đồng bộ hoàn tất: đã cập nhật " + (step.json.upsertedCount || 0) + " hồ sơ. Tổng trong Supabase: " + state.totalInSupabase + ".");
+              showToast("success", "Đã đồng bộ xong vào Supabase!");
+            }
+            return { ok: true };
           } else {
             var weekIdx = 0;
             var totalSynced = 0;
             var keepGoing = true;
             while (keepGoing) {
-              showFeedbackBox("sync-conversions-feedback", "warning", "Đang đồng bộ bù tuần " + (weekIdx + 1) + " / 9 (60 ngày gần nhất)...");
-              var bfResp = await window.fetch(endpoint, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Sync-Secret": secretVal
-                },
-                body: JSON.stringify({ mode: "backfill", weekIndex: weekIdx })
-              });
-              var bfJson = await bfResp.json().catch(function () { return null; });
-              if (!bfResp.ok || !bfJson || !bfJson.ok || bfJson.stop) {
-                var bfErr = (bfJson && bfJson.error) ? bfJson.error : "Tuần " + (weekIdx + 1) + " bị lỗi (HTTP " + bfResp.status + "). Đã dừng để tránh lặp vô hạn.";
-                if (bfResp.status === 401 || bfResp.status === 429) {
-                  setSessionSyncSecret("");
-                  if (secretInput) secretInput.value = "";
-                }
-                showFeedbackBox("sync-conversions-feedback", "error", bfErr);
-                showToast("error", bfErr);
-                await loadConversionsFromSupabase();
-                return;
+              state.syncAutoStatusText = "🔄 Đang đồng bộ bù tuần " + (weekIdx + 1) + "/9...";
+              renderSyncPanelMeta();
+              if (!silent) {
+                showFeedbackBox("sync-conversions-feedback", "warning", "Đang đồng bộ bù tuần " + (weekIdx + 1) + " / 9 (60 ngày gần nhất)...");
               }
-              totalSynced += Number(bfJson.upsertedCount) || 0;
+              var bfStep = await postConversionsSyncStep(endpoint, secretVal, { mode: "backfill", weekIndex: weekIdx });
+              if (!bfStep.resp.ok || !bfStep.json || !bfStep.json.ok || bfStep.json.stop) {
+                var bfErr = (bfStep.json && bfStep.json.error) ? bfStep.json.error : "Tuần " + (weekIdx + 1) + " bị lỗi (HTTP " + bfStep.resp.status + "). Đã dừng để tránh lặp vô hạn.";
+                handleSyncFailure(bfStep.resp.status, bfErr, silent, secretInput);
+                await loadConversionsFromSupabase();
+                return { ok: false };
+              }
+              totalSynced += Number(bfStep.json.upsertedCount) || 0;
               var partialDb = await loadConversionsFromSupabase();
               if (partialDb && Array.isArray(partialDb.rows) && partialDb.rows.length > 0) {
                 state.leads = normalizeAndSortLeads(partialDb.rows);
+                state.lastUpdated = new Date();
                 render();
+                syncCtvBridgeToServer();
               }
-              if (bfJson.hasMore && bfJson.nextWeekIndex != null) {
-                weekIdx = Number(bfJson.nextWeekIndex);
+              if (bfStep.json.hasMore && bfStep.json.nextWeekIndex != null) {
+                weekIdx = Number(bfStep.json.nextWeekIndex);
               } else {
                 keepGoing = false;
               }
             }
-            showFeedbackBox("sync-conversions-feedback", "success", "Đồng bộ bù 60 ngày hoàn tất (" + totalSynced + " hồ sơ). Tổng trong Supabase: " + state.totalInSupabase + ".");
-            showToast("success", "Đồng bộ bù 60 ngày thành công!");
+            state.syncAutoStatusText = "";
+            renderSyncPanelMeta();
+            if (!silent) {
+              showFeedbackBox("sync-conversions-feedback", "success", "Đồng bộ bù 60 ngày hoàn tất (" + totalSynced + " hồ sơ). Tổng trong Supabase: " + state.totalInSupabase + ".");
+              showToast("success", "Đồng bộ bù 60 ngày thành công!");
+            }
+            return { ok: true };
           }
         } catch (err) {
           var netMsg = err && err.message ? err.message : "Lỗi kết nối khi đồng bộ.";
-          showFeedbackBox("sync-conversions-feedback", "error", netMsg);
-          showToast("error", netMsg);
+          if (silent) {
+            if (typeof console !== "undefined" && console.warn) {
+              console.warn("[Auto-Sync] Lỗi kết nối:", netMsg);
+            }
+            state.syncAutoStatusText = "";
+            renderSyncPanelMeta();
+          } else {
+            showFeedbackBox("sync-conversions-feedback", "error", netMsg);
+            showToast("error", netMsg);
+          }
+          return { ok: false };
         } finally {
           state.syncRunning = false;
-          if (syncBtn) {
+          if (state.syncAutoStatusText && state.syncAutoStatusText.indexOf("Đang") !== -1) {
+            state.syncAutoStatusText = "";
+          }
+          renderSyncPanelMeta();
+          if (syncBtn && !silent) {
             syncBtn.disabled = false;
             syncBtn.textContent = "🔄 Đồng bộ ngay";
           }
+        }
+      }
+
+      function stopConversionsPolling() {
+        if (state.syncPollTimerId && typeof window !== "undefined" && typeof window.clearInterval === "function") {
+          window.clearInterval(state.syncPollTimerId);
+        }
+        state.syncPollTimerId = null;
+      }
+
+      function startConversionsPolling() {
+        stopConversionsPolling();
+        var proto = window.location && window.location.protocol;
+        if (proto !== "http:" && proto !== "https:") return;
+        if (typeof window === "undefined" || typeof window.setInterval !== "function") return;
+        state.syncPollTimerId = window.setInterval(function () {
+          if (
+            document.visibilityState === "visible" &&
+            state.mode === "real" &&
+            !state.syncRunning &&
+            getSessionSyncSecret()
+          ) {
+            runConversionsSync({ silent: true });
+          }
+        }, SYNC_POLL_INTERVAL_MS);
+      }
+
+      function ensureAutoSyncAndPolling(fromSettingsSave) {
+        startConversionsPolling();
+        if (state.mode === "real" && !fromSettingsSave && !state.autoSyncInitialDone) {
+          state.autoSyncInitialDone = true;
+          runConversionsSync({ silent: true });
         }
       }
 
@@ -5834,6 +5931,7 @@
             state.lastUpdated = new Date();
             render();
             syncCtvBridgeToServer();
+            ensureAutoSyncAndPolling(false);
             return { ok: true };
           }
         }
@@ -5846,6 +5944,7 @@
           state.lastUpdated = new Date();
           render();
           syncCtvBridgeToServer();
+          ensureAutoSyncAndPolling(fromSettingsSave);
 
           if (fromSettingsSave) {
             showSettingsFeedback(
@@ -5907,6 +6006,7 @@
           state.lastUpdated = new Date();
           render();
           syncCtvBridgeToServer();
+          ensureAutoSyncAndPolling(fromSettingsSave);
 
           if (fromSettingsSave) {
             showSettingsFeedback(
@@ -7657,19 +7757,43 @@
           if (existingSessionSecret) syncSecretEl.value = existingSessionSecret;
           syncSecretEl.addEventListener("input", function () {
             setSessionSyncSecret(syncSecretEl.value.trim());
+            renderSyncPanelMeta();
           });
         }
 
         var syncNowBtn = document.getElementById("btn-sync-conversions-now");
         if (syncNowBtn) {
           syncNowBtn.addEventListener("click", function () {
-            runManualConversionsSync();
+            runConversionsSync({ silent: false }).then(function (res) {
+              if (res && res.ok) startConversionsPolling();
+            });
+          });
+        }
+
+        if (typeof document !== "undefined" && document.addEventListener) {
+          document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "hidden") {
+              stopConversionsPolling();
+              return;
+            }
+            if (document.visibilityState === "visible") {
+              startConversionsPolling();
+              if (state.mode === "real" && !state.syncRunning && getSessionSyncSecret()) {
+                var lastIso = state.syncState && state.syncState.last_sync_at;
+                var lastDt = lastIso ? parseVietnamTime(lastIso) : null;
+                var isStale = !lastDt || (Date.now() - lastDt.getTime() >= SYNC_POLL_INTERVAL_MS);
+                if (isStale) {
+                  runConversionsSync({ silent: true });
+                }
+              }
+            }
           });
         }
 
         var refreshBtn = document.getElementById("btn-refresh");
         if (refreshBtn) {
           refreshBtn.addEventListener("click", function () {
+            state.autoSyncInitialDone = false;
             loadData();
           });
         }

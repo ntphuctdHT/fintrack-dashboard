@@ -9,11 +9,16 @@ const INDEX_HTML = fs.readFileSync(path.join(process.cwd(), "index.html"), "utf8
 const CTV_VIEW_HTML = fs.readFileSync(path.join(process.cwd(), "ctv-view.html"), "utf8");
 
 test("Conversions sync engine handles secrets, rate limits, retries, upsert mapping, backfill stop, lock, and CTV privacy", async () => {
-  // Static privacy & security checks on HTML files
+  // Static privacy, security & auto-sync/polling checks on HTML files
   assert.doesNotMatch(INDEX_HTML, /localStorage\.setItem\([^)]*SYNC_SECRET/i);
+  assert.doesNotMatch(INDEX_HTML, /id="select-sync-mode"/);
   assert.match(INDEX_HTML, /sessionStorage/);
   assert.match(INDEX_HTML, /Tổng số hồ sơ trong Supabase/);
   assert.match(INDEX_HTML, /Đồng bộ ngay/);
+  assert.match(INDEX_HTML, /SYNC_POLL_INTERVAL_MS\s*=\s*10\s*\*\s*60\s*\*\s*1000/);
+  assert.match(INDEX_HTML, /ensureAutoSyncAndPolling/);
+  assert.match(INDEX_HTML, /startConversionsPolling/);
+  assert.match(INDEX_HTML, /visibilitychange/);
   assert.match(CTV_VIEW_HTML, /Hoa hồng dự kiến/);
   assert.doesNotMatch(CTV_VIEW_HTML, /Hoa hồng CTV nhận/);
 
