@@ -39,6 +39,195 @@ test("index.html meets structural, security, and no-external-library constraints
   // Có đủ 4 tab và thông báo trạng thái rỗng CTV
   assert.match(INDEX_HTML, /id="tab-ctv"/);
   assert.match(INDEX_HTML, /Chưa có CTV nào\. Nhập biệt danh ở trên rồi bấm Tạo mã CTV\./);
+
+  // Chống lỗi ReferenceError (btn / listContainer chưa khai báo) trong trình xử lý click CTV
+  const clickBlockMatch = INDEX_HTML.match(
+    /var ctvListContainer = document\.getElementById\("ctv-list-container"\);[\s\S]*?var downloadBackupBtn/
+  );
+  assert.ok(clickBlockMatch, "Expected ctvListContainer click handler block");
+  assert.doesNotMatch(clickBlockMatch[0], /(^|[^\w.])btn\.(getAttribute|disabled|textContent)/m);
+  assert.doesNotMatch(clickBlockMatch[0], /(^|[^\w.])listContainer\./m);
+  assert.match(INDEX_HTML, /function flashCopyButton[\s\S]*?querySelectorAll/);
+});
+
+test("CTV project copy buttons (VietCredit & TNEX) shorten, copy to clipboard, flash button, and show toast without ReferenceError", async () => {
+  const scriptMatch = INDEX_HTML.match(/<script>([\s\S]*?)<\/script>/);
+  assert.ok(scriptMatch, "Expected inline <script> in index.html");
+  let scriptBody = scriptMatch[1];
+
+  scriptBody = scriptBody.replace(
+    "applyBranding();",
+    `globalThis.__CLICK_TEST_EXPORTS__ = { state, bindEvents, renderCtvListOnly };
+    return;`
+  );
+
+  const elements = new Map();
+  const makeEl = (id) => {
+    const listeners = {};
+    const el = {
+      id,
+      textContent: "",
+      innerHTML: "",
+      hidden: true,
+      className: "",
+      value: "",
+      style: {},
+      attributes: {},
+      classList: {
+        add(c) { el.className += " " + c; },
+        remove(c) { el.className = el.className.replace(c, "").trim(); },
+        contains(c) { return el.className.split(/\s+/).includes(c); }
+      },
+      setAttribute(k, v) { el.attributes[k] = String(v); },
+      getAttribute(k) { return el.attributes[k] || ""; },
+      appendChild() {},
+      removeChild() {},
+      focus() {},
+      select() {},
+      setSelectionRange() {},
+      addEventListener(ev, fn) {
+        if (!listeners[ev]) listeners[ev] = [];
+        listeners[ev].push(fn);
+      },
+      async trigger(ev, evObj) {
+        const list = listeners[ev] || [];
+        for (const fn of list) {
+          await fn(evObj);
+        }
+      },
+      querySelectorAll() { return []; },
+      querySelector() { return null; }
+    };
+    return el;
+  };
+
+  const ctvListContainer = makeEl("ctv-list-container");
+  const appToast = makeEl("app-toast");
+  elements.set("ctv-list-container", ctvListContainer);
+  elements.set("app-toast", appToast);
+
+  const makeMockBtn = (attrs, label) => {
+    const b = makeEl("");
+    b.attributes = { ...attrs };
+    b.textContent = label;
+    b.isConnected = true;
+    return b;
+  };
+  const vcBtn = makeMockBtn({ "data-ctv-action": "copy-project-sales", "data-project-key": "vietcredit", "data-ctv-id": "ctv1" }, "📋 Copy link VietCredit");
+  const tnexBtn = makeMockBtn({ "data-ctv-action": "copy-project-sales", "data-project-key": "tnex", "data-ctv-id": "ctv1" }, "📋 Copy link TNEX (MSB)");
+
+  ctvListContainer.querySelectorAll = (sel) => {
+    if (sel.includes('data-project-key="vietcredit"')) return [vcBtn];
+    if (sel.includes('data-project-key="tnex"')) return [tnexBtn];
+    return [];
+  };
+
+  const copiedItems = [];
+  const shortenRequests = [];
+  const mockStore = {};
+  const mockWindow = {
+    location: { protocol: "https:", origin: "https://dash.example.vn" },
+    crypto: globalThis.crypto,
+    setTimeout: (fn, ms) => { if (ms < 500) fn(); return 1; },
+    clearTimeout: () => {},
+    localStorage: {
+      getItem: (k) => mockStore[k] || null,
+      setItem: (k, v) => { mockStore[k] = String(v); }
+    },
+    fetch: async (url, opts) => {
+      if (String(url).includes("/api/shorten-link")) {
+        const body = JSON.parse(opts.body);
+        shortenRequests.push(body);
+        const shortUrl = body.project_key === "tnex" ? "https://is.gd/Tnex_mock99" : "https://is.gd/VietCredit_mock88";
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ short_url: shortUrl, provider: "isgd", provider_label: "is.gd" })
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
+  };
+
+  const context = vm.createContext({
+    window: mockWindow,
+    navigator: {
+      clipboard: {
+        writeText: async (text) => { copiedItems.push(text); }
+      }
+    },
+    document: {
+      visibilityState: "visible",
+      documentElement: { setAttribute() {}, removeAttribute() {} },
+      addEventListener: () => {},
+      getElementById: (id) => {
+        if (!elements.has(id)) elements.set(id, makeEl(id));
+        return elements.get(id);
+      },
+      querySelectorAll: () => [],
+      createElement: () => makeEl("")
+    },
+    crypto: globalThis.crypto,
+    Uint8Array,
+    Intl,
+    Date,
+    Number,
+    String,
+    Array,
+    Math,
+    URL,
+    JSON
+  });
+
+  vm.runInContext(scriptBody, context);
+  const { state, bindEvents } = context.__CLICK_TEST_EXPORTS__;
+  state.ctvList = [{ id: "ctv1", name: "Minh", ref: "minh88", view: "viewcode1234567890123456", active: true }];
+  state.expandedCtvId = "ctv1";
+  state.ctvLinkConfig = {
+    publisher: "4876420781540702864",
+    campaign: "6997817930567730686",
+    targetUrl: "https://tinvay.vietcredit.com.vn/",
+    viewBase: "https://dash.example.vn",
+    salesLinkMode: "short_auto",
+    trackClicks: true,
+    defaultProject: "vietcredit",
+    projects: {
+      vietcredit: {
+        id: "vietcredit",
+        publisher: "4876420781540702864",
+        campaign: "6997817930567730686",
+        targetUrl: "https://tinvay.vietcredit.com.vn/"
+      },
+      tnex: {
+        id: "tnex",
+        publisher: "4876420781540702864",
+        campaign: "7777666655554444333",
+        targetUrl: "https://tnex.com.vn/"
+      }
+    }
+  };
+  bindEvents();
+
+  // Click VietCredit copy button
+  await ctvListContainer.trigger("click", {
+    target: { closest: (sel) => (sel === "[data-ctv-action]" ? vcBtn : null) }
+  });
+  assert.equal(shortenRequests[0].project_key, "vietcredit");
+  assert.equal(copiedItems[0], "https://is.gd/VietCredit_mock88");
+  assert.equal(appToast.hidden, false);
+  assert.match(appToast.textContent, /https:\/\/is\.gd\/VietCredit_mock88/);
+  assert.match(vcBtn.className, /btn-copied-flash/);
+  assert.equal(vcBtn.textContent, "✅ Đã sao chép!");
+
+  // Click TNEX copy button
+  await ctvListContainer.trigger("click", {
+    target: { closest: (sel) => (sel === "[data-ctv-action]" ? tnexBtn : null) }
+  });
+  assert.equal(shortenRequests[1].project_key, "tnex");
+  assert.equal(copiedItems[1], "https://is.gd/Tnex_mock99");
+  assert.match(appToast.textContent, /https:\/\/is\.gd\/Tnex_mock99/);
+  assert.match(tnexBtn.className, /btn-copied-flash/);
+  assert.equal(tnexBtn.textContent, "✅ Đã sao chép!");
 });
 
 test("index.html pure logic functions work accurately (XSS, GMT+7, status, stats)", () => {
