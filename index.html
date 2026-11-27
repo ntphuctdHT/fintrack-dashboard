@@ -3604,6 +3604,24 @@
         return lead.ctvRef ? String(lead.ctvRef).trim() : "";
       }
 
+      function resolveLeadProjectKey(campaignName) {
+        var camp = String(campaignName || "").toUpperCase();
+        if (!camp) return "";
+        if (camp.indexOf("TNEX") !== -1) return "tnex";
+        if (
+          camp.indexOf("VIETCREDIT") !== -1 ||
+          camp.indexOf("VCREDIT") !== -1 ||
+          camp.indexOf("TÍN VIỆT") !== -1 ||
+          camp.indexOf("TIN VIET") !== -1 ||
+          camp.indexOf("TINVAY") !== -1 ||
+          camp.indexOf("TIN VAY") !== -1 ||
+          camp.indexOf("TIN_VAY") !== -1
+        ) {
+          return "vietcredit";
+        }
+        return "";
+      }
+
       function computeLeadSplit(lead, policy) {
         var activePolicy = policy || {};
         var atRates = activePolicy.atRates || DEFAULT_AT_RATES;
@@ -3621,8 +3639,7 @@
         if (!Number.isFinite(ctvRate) || ctvRate < 0) ctvRate = DEFAULT_CTV_RATES[riskKey];
 
         // Áp dụng hoa hồng theo từng dự án: TNEX (2%), VietCredit (theo rủi ro)
-        var campUpper = String((lead && lead.campaignName) || "").toUpperCase();
-        if (campUpper.indexOf("TNEX") !== -1) {
+        if (resolveLeadProjectKey(lead && lead.campaignName) === "tnex") {
           ctvRate = 2.0;
           atRate = 2.5;
         }
@@ -6413,11 +6430,11 @@
             state.filterStatus === "all" || lead.statusInfo.key === state.filterStatus;
           if (!matchesStatus) return false;
           if (state.filterProject && state.filterProject !== "all") {
-            var camp = (lead.campaignName || "").toUpperCase();
-            if (state.filterProject === "vietcredit" && camp.indexOf("VIETCREDIT") === -1 && camp.indexOf("TÍN VIỆT") === -1 && camp.indexOf("TIN VIET") === -1) {
+            var leadProjKey = resolveLeadProjectKey(lead.campaignName);
+            if (state.filterProject === "vietcredit" && leadProjKey !== "vietcredit") {
               return false;
             }
-            if (state.filterProject === "tnex" && camp.indexOf("TNEX") === -1) {
+            if (state.filterProject === "tnex" && leadProjKey !== "tnex") {
               return false;
             }
           }

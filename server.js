@@ -2430,6 +2430,25 @@ function normalizeConversionRowToLead(row) {
   };
 }
 
+function resolveServerLeadProjectKey(campaignName) {
+  const campUpper = String(campaignName || "").toUpperCase();
+  if (!campUpper) return "";
+  if (campUpper.includes("TNEX")) return "tnex";
+  if (campUpper.includes("VPBANK") || campUpper.includes("VP BANK")) return "vpbank";
+  if (
+    campUpper.includes("VIETCREDIT") ||
+    campUpper.includes("VCREDIT") ||
+    campUpper.includes("TÍN VIỆT") ||
+    campUpper.includes("TIN VIET") ||
+    campUpper.includes("TINVAY") ||
+    campUpper.includes("TIN VAY") ||
+    campUpper.includes("TIN_VAY")
+  ) {
+    return "vietcredit";
+  }
+  return "";
+}
+
 async function buildCtvViewPayload(ctv, reqOrigin) {
   // Nạp settings mới nhất từ Supabase để đảm bảo ctvLinkConfig, policy và accessKey luôn được đồng bộ
   if (bridgeState.mode !== "demo") {
@@ -2548,13 +2567,13 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
     if (leadRefVal !== ctvRefLower) continue;
 
     const status = mapViewOrderStatus(lead.statusKey);
-    const campUpper = String(lead.campaignName || "").toUpperCase();
+    const leadProjectKey = resolveServerLeadProjectKey(lead.campaignName);
 
     let ctvComm = 0;
     if (status !== "cancelled") {
-      if (campUpper.includes("TNEX")) {
+      if (leadProjectKey === "tnex") {
         ctvComm = Math.round((Number(lead.commission) || 0) * (2.0 / 2.5));
-      } else if (campUpper.includes("VPBANK") || campUpper.includes("VP BANK")) {
+      } else if (leadProjectKey === "vpbank") {
         ctvComm = Math.round((Number(lead.commission) || 0) * (2.0 / 2.5));
       } else {
         const riskKey =

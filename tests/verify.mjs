@@ -266,6 +266,8 @@ test("index.html pure logic functions work accurately (XSS, GMT+7, status, stats
       normalizeCtvField,
       parseRateNumber,
       getLeadCtvCode,
+      resolveLeadProjectKey,
+      getFilteredLeads,
       computeLeadSplit,
       computeClickOverviewStats,
       normalizeLead,
@@ -380,6 +382,24 @@ test("index.html pure logic functions work accurately (XSS, GMT+7, status, stats
   assert.equal(api.resolveLeadStatus(1, 1).fullLabel, "✔✔ Đã đối soát");
   assert.equal(api.resolveLeadStatus(1, 0).fullLabel, "✔ Đã duyệt");
   assert.equal(api.resolveLeadStatus(0, 0).fullLabel, "⏳ Chờ duyệt");
+
+  assert.equal(api.resolveLeadProjectKey("vcredit2026"), "vietcredit");
+  assert.equal(api.resolveLeadProjectKey("Tin Vay VietCredit"), "vietcredit");
+  assert.equal(api.resolveLeadProjectKey("tinvay"), "vietcredit");
+  assert.equal(api.resolveLeadProjectKey("tnex_vay"), "tnex");
+  api.state.leads = api.normalizeAndSortLeads([
+    { conversion_id: "101", advertiser: "vcredit2026", sales_time: "2026-11-27T09:00:00+07:00", status: 0, commission: 300000 },
+    { conversion_id: "102", advertiser: "tnex_vay", sales_time: "2026-11-27T09:10:00+07:00", status: 1, commission: 120000 }
+  ]);
+  api.state.filterStatus = "all";
+  api.state.filterProject = "vietcredit";
+  assert.equal(api.getFilteredLeads().length, 1);
+  assert.equal(api.getFilteredLeads()[0].conversionId, "101");
+  api.state.filterProject = "tnex";
+  assert.equal(api.getFilteredLeads().length, 1);
+  assert.equal(api.getFilteredLeads()[0].conversionId, "102");
+  api.state.filterProject = "all";
+  api.state.leads = [];
 
   assert.equal(api.normalizeRiskLevel("Low"), "low");
   assert.equal(api.normalizeRiskLevel("MEDIUM"), "medium");
