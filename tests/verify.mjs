@@ -1484,3 +1484,397 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     } catch { }
   }
 });
+
+test("Security Method 3: ADMIN_SECRET locks admin APIs, bootstrap never leaks accessKey or CTV view codes, and CTV routes remain public", async () => {
+  const ADMIN_PASS = "admin-pass-strong-987";
+  const SECRET_AT_KEY = "at-secret-should-never-leak-to-client";
+  const SECRET_VIEW_CODE = "minhsecretviewcode998877";
+
+  const modServer = (await import("../server.js")).default;
+  assert.equal(typeof modServer.maskOrderId, "function");
+  assert.equal(modServer.maskOrderId("494045787"), "494045787");
+  assert.equal(modServer.maskOrderId("nguyenminhhieu034*******"), "ng****u034*");
+  assert.equal(modServer.maskOrderId("ng****u034*"), "ng****u034*");
+  assert.equal(modServer.maskOrderId("ORD1234567890"), "OR****7890");
+  assert.equal(modServer.maskOrderId("Nguyen Van A"), "Ng****an A");
+  assert.equal(modServer.maskOrderId(""), "");
+
+  const mockSupabase = http.createServer((req, res) => {
+    const reqUrl = new URL(req.url || "/", "http://127.0.0.1");
+    const p = reqUrl.pathname;
+    if (p.includes("ctvs")) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify([
+          { id: "c1", name: "Minh", ref: "minh88", view_code: SECRET_VIEW_CODE, active: true }
+        ])
+      );
+      return;
+    }
+    if (p.includes("app_settings")) {
+      const k = (reqUrl.searchParams.get("key") || "").replace(/^eq\./, "");
+      if (k === "ctv_config") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify([
+            {
+              key: "ctv_config",
+              value: {
+                mode: "real",
+                accessKey: SECRET_AT_KEY,
+                ctvList: [{ id: "c1", name: "Minh", ref: "minh88", view: SECRET_VIEW_CODE, active: true }],
+                ctvLinkConfig: {
+                  publisher: "4608706208340350795",
+                  campaign: "6997817930567730686",
+                  targetUrl: "https://tinvay.vietcredit.com.vn/"
+                },
+                policy: { ownerName: "Dasboard Fin", ctvField: "sub2", defaultRisk: "high" }
+              }
+            }
+          ])
+        );
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify([]));
+      return;
+    }
+    if (p.includes("conversions")) {
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Content-Range": "0-0/1"
+      });
+      res.end(
+        JSON.stringify([
+          {
+            conversion_id: 777001,
+            sales_time: "2026-11-27T09:00:00+07:00",
+            order_id: "nguyenminhhieu034*******",
+            order_value: 20000000,
+            advertiser: "tnex_vay",
+            commission: 250000,
+            status: 1,
+            is_confirmed: 0,
+            ctv_ref: "minh88",
+            tracking: {
+              sub2: "minh88",
+              extra: { device: "Android", phone: "0341234567" }
+            }
+          }
+        ])
+      );
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify([]));
+  });
+
+  await new Promise((r) => mockSupabase.listen(0, "127.0.0.1", r));
+  const sbPort = mockSupabase.address().port;
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "df-admin-auth-"));
+  fs.writeFileSync(path.join(tmpDir, "server.js"), SERVER_JS);
+  fs.writeFileSync(path.join(tmpDir, "index.html"), INDEX_HTML);
+  fs.writeFileSync(path.join(tmpDir, "ctv-view.html"), CTV_VIEW_HTML_SRC);
+
+  const child = spawn(process.execPath, [path.join(tmpDir, "server.js")], {
+    cwd: tmpDir,
+    env: {
+      ...process.env,
+      PORT: "0",
+      SUPABASE_URL: `http://127.0.0.1:${sbPort}`,
+      SUPABASE_KEY: "mock-anon",
+      SUPABASE_SERVICE_ROLE_KEY: "mock-service-role",
+      ADMIN_SECRET: ADMIN_PASS
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  let serverPort = null;
+  const started = new Promise((resolve, reject) => {
+    child.stdout.on("data", (d) => {
+      const m = d.toString().match(/http:\/\/localhost:(\d+)/i);
+      if (m && !serverPort) {
+        serverPort = Number(m[1]);
+        resolve();
+      }
+    });
+    child.on("error", reject);
+    setTimeout(() => reject(new Error("server.js timed out")), 10000);
+  });
+
+  try {
+    await started;
+    const base = `http://127.0.0.1:${serverPort}`;
+
+    // 1. All admin endpoints return 401 when unauthenticated
+    const adminEndpoints = [
+      { method: "GET", path: "/api/admin/bootstrap" },
+      { method: "GET", path: "/api/admin/ctv-views" },
+      { method: "GET", path: "/api/conversions" },
+      { method: "GET", path: "/api/transactions?since=2026-11-01&until=2026-11-27" },
+      { method: "GET", path: "/api/ctv-clicks" },
+      { method: "POST", path: "/api/ctv-bridge/sync", body: "{}" },
+      { method: "POST", path: "/api/ctv-bridge/delete", body: "{}" },
+      { method: "POST", path: "/api/create-link", body: "{}" },
+      { method: "POST", path: "/api/resolve-short-link", body: "{}" },
+      { method: "POST", path: "/api/shorten-link", body: "{}" }
+    ];
+    for (const ep of adminEndpoints) {
+      const r = await fetch(base + ep.path, {
+        method: ep.method,
+        headers: ep.body ? { "Content-Type": "application/json" } : {},
+        body: ep.body
+      });
+      assert.equal(r.status, 401, `${ep.method} ${ep.path} must return 401 without ADMIN_SECRET`);
+      const errJson = await r.json();
+      assert.equal(errJson.requiresAdminAuth, true);
+    }
+
+    // 2. Public CTV & tracking routes STILL work without ADMIN_SECRET
+    const homeRes = await fetch(base + "/");
+    assert.equal(homeRes.status, 200);
+    assert.match(homeRes.headers.get("x-robots-tag") || "", /noindex/i);
+    const ctvHtmlRes = await fetch(base + `/xem/${SECRET_VIEW_CODE}`);
+    assert.equal(ctvHtmlRes.status, 200);
+    const viewApiRes = await fetch(base + `/api/view/${SECRET_VIEW_CODE}`);
+    assert.equal(viewApiRes.status, 200);
+    const viewPayloadText = await viewApiRes.text();
+    assert.equal(viewPayloadText.includes(SECRET_AT_KEY), false);
+    assert.equal(viewPayloadText.includes("nguyenminhhieu"), false, "Raw order_id PII must NEVER leak on /api/view");
+    const viewPayload = JSON.parse(viewPayloadText);
+    assert.equal(viewPayload.orders[0].id, "ng****u034*");
+    const redirRes = await fetch(base + "/l/minh88", { redirect: "manual" });
+    assert.equal(redirRes.status, 302);
+    assert.match(redirRes.headers.get("location") || "", /sub2=minh88/);
+
+    // 3. Authenticated /api/admin/bootstrap works AND never leaks accessKey or CTV view codes
+    const bootRes = await fetch(base + "/api/admin/bootstrap", {
+      headers: { "X-Admin-Secret": ADMIN_PASS }
+    });
+    assert.equal(bootRes.status, 200);
+    const bootRawText = await bootRes.text();
+    assert.equal(bootRawText.includes(SECRET_AT_KEY), false, "accessKey MUST NEVER appear in bootstrap response");
+    assert.equal(bootRawText.includes(SECRET_VIEW_CODE), false, "CTV view codes MUST NEVER appear in bootstrap response");
+    const bootJson = JSON.parse(bootRawText);
+    assert.equal(bootJson.adminAuthEnabled, true);
+    assert.equal(bootJson.hasAccessKey, true);
+    assert.equal(bootJson.ctvList[0].view, undefined);
+    assert.equal(bootJson.settings.accessKey, undefined);
+
+    // 4. Authenticated /api/admin/ctv-views returns viewsByRef
+    const viewsRes = await fetch(base + "/api/admin/ctv-views", {
+      headers: { Authorization: "Bearer " + ADMIN_PASS }
+    });
+    assert.equal(viewsRes.status, 200);
+    const viewsJson = await viewsRes.json();
+    assert.equal(viewsJson.viewsByRef.minh88, SECRET_VIEW_CODE);
+
+    // 5. Authenticated /api/conversions masks unmasked rows on read & strips tracking.extra
+    const convRes = await fetch(base + "/api/conversions", {
+      headers: { "X-Admin-Secret": ADMIN_PASS }
+    });
+    assert.equal(convRes.status, 200);
+    const convText = await convRes.text();
+    assert.equal(convText.includes("nguyenminhhieu"), false);
+    assert.equal(convText.includes("0341234567"), false);
+    const convJson = JSON.parse(convText);
+    assert.equal(convJson.rows[0].order_id, "ng****u034*");
+    assert.equal("extra" in convJson.rows[0].tracking, false);
+
+    // 6. Brute-force protection locks after 5 invalid admin guesses
+    for (let i = 0; i < 5; i += 1) {
+      await fetch(base + "/api/admin/bootstrap", {
+        headers: { "X-Admin-Secret": "wrong-guess-" + i }
+      });
+    }
+    const lockedRes = await fetch(base + "/api/admin/bootstrap", {
+      headers: { "X-Admin-Secret": ADMIN_PASS }
+    });
+    assert.equal(lockedRes.status, 429);
+  } finally {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => {
+      if (child.exitCode !== null) return resolve();
+      child.on("exit", () => resolve());
+      setTimeout(resolve, 500);
+    });
+    await new Promise((resolve) => mockSupabase.close(resolve));
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch { }
+  }
+});
+
+test("Admin login gate in index.html locks .app-shell on 401, unlocks via sessionStorage only, and hydrates CTV views", async () => {
+  const scriptMatch = INDEX_HTML.match(/<script>([\s\S]*?)<\/script>/);
+  assert.ok(scriptMatch, "Expected inline <script> in index.html");
+  let scriptBody = scriptMatch[1];
+  scriptBody = scriptBody.replace(
+    "applyBranding();",
+    `globalThis.__AUTH_TEST__ = { state, bindEvents, bootstrapFromCloud, fetchAdminCtvViews, showAdminAuthGate, hideAdminAuthGate, getSessionAdminSecret, setSessionAdminSecret };
+    return;`
+  );
+
+  const elements = new Map();
+  const makeEl = (id) => {
+    const listeners = {};
+    const el = {
+      id,
+      textContent: "",
+      innerHTML: "",
+      hidden: id === "admin-auth-gate" || id === "btn-admin-logout",
+      className: "",
+      value: "",
+      type: "password",
+      disabled: false,
+      style: {},
+      attributes: {},
+      classList: { add() {}, remove() {}, contains() { return false; } },
+      setAttribute(k, v) { el.attributes[k] = String(v); },
+      getAttribute(k) { return el.attributes[k] || ""; },
+      appendChild() {},
+      removeChild() {},
+      focus() {},
+      select() {},
+      setSelectionRange() {},
+      addEventListener(ev, fn) {
+        if (!listeners[ev]) listeners[ev] = [];
+        listeners[ev].push(fn);
+      },
+      async trigger(ev, evObj) {
+        for (const fn of (listeners[ev] || [])) {
+          await fn(evObj || { preventDefault() {}, currentTarget: el, target: el });
+        }
+      },
+      querySelectorAll() { return []; },
+      querySelector() { return null; }
+    };
+    return el;
+  };
+  for (const id of ["admin-auth-gate", "app-shell", "btn-admin-logout", "admin-login-form", "input-admin-secret", "btn-admin-login", "admin-login-feedback", "btn-toggle-admin-secret", "app-toast"]) {
+    elements.set(id, makeEl(id));
+  }
+
+  const localStore = {};
+  const sessionStore = {};
+  const fetchCalls = [];
+  const context = vm.createContext({
+    window: {
+      location: { protocol: "https:", origin: "https://dash.example.vn" },
+      crypto: globalThis.crypto,
+      setTimeout: (fn) => { fn(); return 1; },
+      clearTimeout: () => {},
+      setInterval: () => 1,
+      clearInterval: () => {},
+      addEventListener: () => {},
+      localStorage: {
+        getItem: (k) => (Object.prototype.hasOwnProperty.call(localStore, k) ? localStore[k] : null),
+        setItem: (k, v) => { localStore[k] = String(v); },
+        removeItem: (k) => { delete localStore[k]; }
+      },
+      sessionStorage: {
+        getItem: (k) => (Object.prototype.hasOwnProperty.call(sessionStore, k) ? sessionStore[k] : null),
+        setItem: (k, v) => { sessionStore[k] = String(v); },
+        removeItem: (k) => { delete sessionStore[k]; }
+      },
+      fetch: async (url, opts) => {
+        const hdrs = (opts && opts.headers) || {};
+        fetchCalls.push({ url: String(url), adminSecret: hdrs["X-Admin-Secret"] || "" });
+        if (String(url).includes("/api/admin/bootstrap")) {
+          if (hdrs["X-Admin-Secret"] !== "valid-admin-pass") {
+            return {
+              ok: false,
+              status: 401,
+              json: async () => ({ error: "Cần đăng nhập để truy cập trang quản trị.", requiresAdminAuth: true })
+            };
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              ok: true,
+              adminAuthEnabled: true,
+              hasAccessKey: true,
+              ctvList: [{ id: "c1", name: "Minh", ref: "minh88", active: true }],
+              settings: null,
+              clicksByRef: {}
+            })
+          };
+        }
+        if (String(url).includes("/api/admin/ctv-views")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, viewsByRef: { minh88: "viewcodefromadminapi1234" } })
+          };
+        }
+        if (String(url).includes("/api/transactions")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ data: [] })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ ok: true, available: true, rows: [], totalInSupabase: 0 }) };
+      }
+    },
+    document: {
+      visibilityState: "visible",
+      documentElement: { setAttribute() {}, removeAttribute() {} },
+      addEventListener: () => {},
+      getElementById: (id) => {
+        if (!elements.has(id)) elements.set(id, makeEl(id));
+        return elements.get(id);
+      },
+      querySelectorAll: () => [],
+      createElement: () => makeEl("")
+    },
+    crypto: globalThis.crypto,
+    Uint8Array,
+    Intl,
+    Date,
+    Number,
+    String,
+    Array,
+    Math,
+    URL,
+    JSON
+  });
+
+  vm.runInContext(scriptBody, context);
+  const auth = context.__AUTH_TEST__;
+  auth.bindEvents();
+
+  // 1. Unauthenticated bootstrap -> requires login gate, keeps app-shell hidden
+  const bootUnauth = await auth.bootstrapFromCloud();
+  assert.equal(bootUnauth.ok, false);
+  assert.equal(bootUnauth.authRequired, true);
+  auth.showAdminAuthGate("");
+  assert.equal(elements.get("app-shell").hidden, true);
+  assert.equal(elements.get("admin-auth-gate").hidden, false);
+
+  // 2. Wrong password rejected
+  elements.get("input-admin-secret").value = "wrong-pass";
+  await elements.get("admin-login-form").trigger("submit");
+  assert.equal(auth.getSessionAdminSecret(), "");
+  assert.equal(elements.get("app-shell").hidden, true);
+  assert.equal(elements.get("admin-login-feedback").hidden, false);
+
+  // 3. Valid password unlocks, persists ONLY in sessionStorage (NOT localStorage), and fetches CTV view codes
+  elements.get("input-admin-secret").value = "valid-admin-pass";
+  await elements.get("admin-login-form").trigger("submit");
+  assert.equal(auth.getSessionAdminSecret(), "valid-admin-pass");
+  assert.equal(JSON.stringify(localStore).includes("valid-admin-pass"), false, "ADMIN_SECRET must NEVER be written to localStorage");
+  assert.equal(elements.get("app-shell").hidden, false);
+  assert.equal(elements.get("admin-auth-gate").hidden, true);
+  assert.equal(elements.get("btn-admin-logout").hidden, false);
+  assert.equal(auth.state.ctvList[0].view, "viewcodefromadminapi1234");
+  assert.equal(auth.state.serverHasAccessKey, true);
+
+  // 4. Logout locks UI and clears sessionStorage
+  await elements.get("btn-admin-logout").trigger("click");
+  assert.equal(auth.getSessionAdminSecret(), "");
+  assert.equal(elements.get("app-shell").hidden, true);
+  assert.equal(elements.get("admin-auth-gate").hidden, false);
+});

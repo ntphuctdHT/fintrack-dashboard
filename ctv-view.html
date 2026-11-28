@@ -1497,8 +1497,9 @@
             computed.commission += comm;
           }
 
+          var rawOrderId = item.id != null ? String(item.id).trim() : String(i + 1);
           orders.push({
-            id: item.id != null ? String(item.id).trim().slice(0, 6) : String(i + 1),
+            id: rawOrderId.indexOf("****") !== -1 ? rawOrderId.slice(0, 20) : rawOrderId.slice(0, 6),
             campaign:
               typeof item.campaign === "string" && item.campaign.trim()
                 ? item.campaign.trim()

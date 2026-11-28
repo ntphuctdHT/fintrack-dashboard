@@ -8,10 +8,13 @@ import { spawn } from "node:child_process";
 const INDEX_HTML = fs.readFileSync(path.join(process.cwd(), "index.html"), "utf8");
 const CTV_VIEW_HTML = fs.readFileSync(path.join(process.cwd(), "ctv-view.html"), "utf8");
 
-test("Conversions sync engine handles secrets, rate limits, retries, upsert mapping, backfill stop, lock, and CTV privacy", async () => {
+test("Conversions sync engine handles secrets, rate limits, retries, upsert mapping, backfill stop, lock, smart masking, and CTV privacy", async () => {
   // Static privacy, security & auto-sync/polling checks on HTML files
   assert.doesNotMatch(INDEX_HTML, /localStorage\.setItem\([^)]*SYNC_SECRET/i);
+  assert.doesNotMatch(INDEX_HTML, /localStorage\.setItem\([^)]*ADMIN_SECRET/i);
   assert.doesNotMatch(INDEX_HTML, /id="select-sync-mode"/);
+  assert.match(INDEX_HTML, /id="admin-auth-gate"/);
+  assert.match(INDEX_HTML, /ADMIN_SECRET_SESSION_KEY/);
   assert.match(INDEX_HTML, /sessionStorage/);
   assert.match(INDEX_HTML, /Tổng số hồ sơ trong Supabase/);
   assert.match(INDEX_HTML, /Đồng bộ ngay/);
@@ -23,6 +26,22 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
   assert.doesNotMatch(CTV_VIEW_HTML, /Hoa hồng CTV nhận/);
 
   const conversionsDb = new Map();
+  // Seed legacy unmasked Supabase row with tracking.extra to verify automatic scrubbing
+  conversionsDb.set("900123400", {
+    conversion_id: 900123400,
+    sales_time: "2026-11-24T10:00:00+07:00",
+    order_id: "tranthibich098*******",
+    order_value: 10000000,
+    advertiser: "tnex_vay",
+    commission: 250000,
+    status: 1,
+    is_confirmed: 0,
+    ctv_ref: "other_pub",
+    tracking: {
+      sub2: "other_pub",
+      extra: { device: "iPhone", phone: "0981112222" }
+    }
+  });
   const syncStateDb = {};
   const ctvsDb = [
     { id: "c1", name: "Minh", ref: "minh88", view_code: "minhviewcode99887766", active: true }
@@ -77,19 +96,31 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
           data: [
             {
               conversion_id: 900123456,
-              transaction_id: "ORD1234567890",
+              transaction_id: "494045787",
               transaction_time: "2026-11-26 09:30:00",
               transaction_value: 25000000,
-              merchant: "Tin Vay VietCredit",
+              merchant: "vcredit2026",
               commission: 550000,
               status: 1,
               is_confirmed: 0,
               update_time: "2026-11-26 10:00:00",
-              _extra: { sub2: "minh88", utm_campaign: "minh88" }
+              _extra: { sub2: "minh88", utm_campaign: "minh88", device_brand: "Apple" }
+            },
+            {
+              conversion_id: 900123458,
+              transaction_id: "nguyenminhhieu034*******",
+              transaction_time: "2026-11-26 11:15:00",
+              transaction_value: 20000000,
+              merchant: "tnex_vay",
+              commission: 400000,
+              status: 0,
+              is_confirmed: 0,
+              update_time: "2026-11-26 11:20:00",
+              _extra: { sub2: "minh88", utm_campaign: "minh88", product_name: "TNEX" }
             },
             {
               conversion_id: 900123457,
-              transaction_id: "TNEX987654321",
+              transaction_id: "ORD1234567890",
               transaction_time: "2026-11-26T08:15:00+07:00",
               transaction_value: 15000000,
               merchant: "TNEX - MSB",
@@ -240,21 +271,21 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
     assert.equal(syncOkRes.status, 200);
     const syncOkJson = await syncOkRes.json();
     assert.equal(syncOkJson.ok, true);
-    assert.equal(syncOkJson.upsertedCount, 2);
+    assert.equal(syncOkJson.upsertedCount, 3);
     assert.equal(atCalls, 3, "Should retry twice (502 + success:false) and succeed on 3rd attempt");
     assert.equal(capturedAtHeaders.authorization, "Token secret-at-token-xyz");
     assert.ok(capturedQueryParams[0].update_time_start);
     assert.ok(capturedQueryParams[0].update_time_end);
     assert.equal(capturedQueryParams[0].limit, "200");
 
-    // Verify mapped row in mock Supabase conversions table
+    // Verify mapped row in mock Supabase conversions table (smart masking + stripped extra)
     const row1 = conversionsDb.get("900123456");
     assert.ok(row1);
     assert.equal(row1.conversion_id, 900123456);
     assert.equal(row1.sales_time, "2026-11-26T09:30:00+07:00");
-    assert.equal(row1.order_id, "ORD1234567890");
+    assert.equal(row1.order_id, "494045787", "Purely numeric VietCredit ID must remain unmasked");
     assert.equal(row1.order_value, 25000000);
-    assert.equal(row1.advertiser, "Tin Vay VietCredit");
+    assert.equal(row1.advertiser, "vcredit2026");
     assert.equal(row1.commission, 550000);
     assert.equal(row1.status, 1);
     assert.equal(row1.is_confirmed, 0);
@@ -263,6 +294,21 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
     assert.equal(row1.ctv_ref, "minh88");
     assert.equal(row1.ctv_source, "both");
     assert.equal(row1.ctv_conflict, false);
+    assert.equal("extra" in row1.tracking, false, "tracking.extra must NOT be persisted in Supabase");
+
+    const rowTnex = conversionsDb.get("900123458");
+    assert.ok(rowTnex);
+    assert.equal(rowTnex.order_id, "ng****u034*", "PII TNEX order_id must be smart-masked before DB write");
+    assert.equal("extra" in rowTnex.tracking, false);
+
+    const rowOther = conversionsDb.get("900123457");
+    assert.ok(rowOther);
+    assert.equal(rowOther.order_id, "OR****7890", "Alphanumeric order_id must be smart-masked");
+
+    const rowLegacy = conversionsDb.get("900123400");
+    assert.ok(rowLegacy);
+    assert.equal(rowLegacy.order_id, "tr****h098*", "Legacy Supabase row must be scrubbed during sync");
+    assert.equal("extra" in rowLegacy.tracking, false, "Legacy tracking.extra must be removed during sync");
 
     // Verify sync_state lock released and rate budget saved
     assert.equal(syncStateDb["conversions_sync"].lock.locked, false);
@@ -311,10 +357,10 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
     const adminListRes = await fetch(`http://127.0.0.1:${serverPort}/api/conversions`);
     assert.equal(adminListRes.status, 200);
     const adminListJson = await adminListRes.json();
-    assert.equal(adminListJson.totalInSupabase, 2);
-    assert.equal(adminListJson.rows.length, 2);
+    assert.equal(adminListJson.totalInSupabase, 4);
+    assert.equal(adminListJson.rows.length, 4);
 
-    // G. Ensure real mode is active, then CTV /api/view/:code reads only matching ctv_ref, hides commission, truncates Order ID to 6 chars, keeps order_value
+    // G. Ensure real mode is active, then CTV /api/view/:code reads only matching ctv_ref, hides commission, preserves smart-masked ID, keeps order_value
     await fetch(`http://127.0.0.1:${serverPort}/api/ctv-bridge/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -331,12 +377,14 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
     const ctvRes = await fetch(`http://127.0.0.1:${serverPort}/api/view/minhviewcode99887766`);
     assert.equal(ctvRes.status, 200);
     const ctvJson = await ctvRes.json();
-    assert.equal(ctvJson.totals.total, 1, "Only minh88 row should be visible to Minh");
+    assert.equal(ctvJson.totals.total, 2, "Only minh88 rows should be visible to Minh");
     assert.ok(ctvJson.totals.commission > 0, "Expected commission KPI must remain visible for CTV");
-    assert.equal(ctvJson.orders.length, 1);
-    assert.equal(ctvJson.orders[0].id, "ORD123", "Order ID must be truncated to first 6 chars on server");
-    assert.equal(ctvJson.orders[0].order_value, 25000000);
-    assert.equal(ctvJson.orders[0].commission, undefined, "Order commission must be omitted on CTV payload");
+    assert.equal(ctvJson.orders.length, 2);
+    const byCamp = Object.fromEntries(ctvJson.orders.map((o) => [o.campaign, o]));
+    assert.equal(byCamp["vcredit2026"].id, "494045", "Numeric order ID truncated to 6 chars on CTV view");
+    assert.equal(byCamp["vcredit2026"].order_value, 25000000);
+    assert.equal(byCamp["vcredit2026"].commission, undefined, "Order commission must be omitted on CTV payload");
+    assert.equal(byCamp["tnex_vay"].id, "ng****u034*", "Smart-masked ID stays intact so CTV can recognize customer");
 
     // H. Brute-force protection (5 failed attempts -> 429, blocks subsequent valid attempt)
     for (let k = 0; k < 5; k += 1) {

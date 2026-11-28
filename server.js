@@ -44,14 +44,19 @@ function loadLocalEnvFile() {
 loadLocalEnvFile();
 
 const SUPABASE_URL = (
-  process.env.SUPABASE_URL || "https://qdsmiptuqkrnyfynnoxu.supabase.co"
+  process.env.SUPABASE_URL !== undefined
+    ? process.env.SUPABASE_URL
+    : "https://qdsmiptuqkrnyfynnoxu.supabase.co"
 ).trim().replace(/\/+$/, "");
 const SUPABASE_KEY = (
-  process.env.SUPABASE_KEY || "sb_publishable_NExQDC6cWPJXoxwHEm4Jug_zbYZA5rD"
+  process.env.SUPABASE_KEY !== undefined
+    ? process.env.SUPABASE_KEY
+    : "sb_publishable_NExQDC6cWPJXoxwHEm4Jug_zbYZA5rD"
 ).trim();
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 
 const ENV_ACCESSTRADE_KEY = (process.env.ACCESSTRADE_KEY || "").trim();
+const ADMIN_SECRET = (process.env.ADMIN_SECRET || "").trim();
 const SYNC_SECRET = (process.env.SYNC_SECRET || "").trim();
 const CRON_SECRET = (process.env.CRON_SECRET || "").trim();
 const SYNC_PACE_MS = process.env.SYNC_PACE_MS !== undefined ? Math.max(0, Number(process.env.SYNC_PACE_MS) || 0) : 7000;
@@ -562,7 +567,10 @@ function isValidDateYmd(value) {
 function setCorsHeaders(res) {
   res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-AccessTrade-Key, X-Sync-Secret, X-Cron-Secret, Authorization");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-AccessTrade-Key, X-Sync-Secret, X-Cron-Secret, X-Admin-Secret, Authorization"
+  );
   res.setHeader("Access-Control-Expose-Headers", "X-CTV-Bridge");
   if (ALLOWED_ORIGIN !== "*") {
     res.setHeader("Vary", "Origin");
@@ -574,6 +582,7 @@ const SYNC_LOCK_TTL_MS = 90 * 1000;
 const SYNC_AUTH_FAIL_WINDOW_MS = 15 * 60 * 1000;
 const SYNC_AUTH_MAX_FAILURES = 5;
 const syncAuthFailByIp = new Map();
+const adminAuthFailByIp = new Map();
 
 function sleepMs(ms) {
   const duration = Math.max(0, Number(ms) || 0);
@@ -590,45 +599,94 @@ function timingSafeSecretMatch(provided, expected) {
   return crypto.timingSafeEqual(ha, hb);
 }
 
-function verifySyncSecretAuth(req, expectedSecret, candidateHeaders) {
-  const ip = getClientIp(req);
-  const now = Date.now();
-  const rec = syncAuthFailByIp.get(ip);
-  if (rec && rec.lockedUntil && now < rec.lockedUntil) {
-    return { ok: false, status: 429, error: "Quá nhiều lần nhập sai mã bí mật. Vui lòng thử lại sau 15 phút." };
-  }
-  if (!expectedSecret) {
-    return { ok: false, status: 503, error: "Chưa cấu hình biến môi trường mã bí mật trên máy chủ." };
-  }
-  let provided = "";
+function extractSecretFromHeaders(req, candidateHeaders) {
   for (const hName of candidateHeaders) {
     const raw = req.headers[hName];
     if (typeof raw === "string" && raw.trim()) {
       const val = raw.trim();
       if (hName === "authorization" && /^bearer\s+/i.test(val)) {
-        provided = val.replace(/^bearer\s+/i, "").trim();
+        const bearerVal = val.replace(/^bearer\s+/i, "").trim();
+        if (bearerVal) return bearerVal;
       } else if (hName !== "authorization") {
-        provided = val;
+        return val;
       }
-      if (provided) break;
     }
   }
+  return "";
+}
+
+function verifySecretWithRateLimit(req, expectedSecret, candidateHeaders, options = {}) {
+  const failMap = options.failMap || syncAuthFailByIp;
+  const required = options.required !== false;
+  const missingMsg = options.missingMsg || "Chưa cấu hình biến môi trường mã bí mật trên máy chủ.";
+  const invalidMsg = options.invalidMsg || "Mã bí mật không hợp lệ.";
+
+  if (!expectedSecret) {
+    if (!required) {
+      return { ok: true, authDisabled: true };
+    }
+    return { ok: false, status: 503, error: missingMsg };
+  }
+
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const rec = failMap.get(ip);
+  if (rec && rec.lockedUntil && now < rec.lockedUntil) {
+    return { ok: false, status: 429, error: "Quá nhiều lần nhập sai mã bí mật. Vui lòng thử lại sau 15 phút." };
+  }
+
+  const provided = extractSecretFromHeaders(req, candidateHeaders);
   if (timingSafeSecretMatch(provided, expectedSecret)) {
-    syncAuthFailByIp.delete(ip);
+    failMap.delete(ip);
     return { ok: true };
   }
-  const prevCount = rec && now - rec.firstFailAt <= SYNC_AUTH_FAIL_WINDOW_MS ? rec.count : 0;
-  const nextCount = prevCount + 1;
-  const lockedUntil = nextCount >= SYNC_AUTH_MAX_FAILURES ? now + SYNC_AUTH_FAIL_WINDOW_MS : 0;
-  syncAuthFailByIp.set(ip, {
-    count: nextCount,
-    firstFailAt: prevCount > 0 && rec ? rec.firstFailAt : now,
-    lockedUntil
-  });
-  if (lockedUntil) {
-    return { ok: false, status: 429, error: "Nhập sai mã bí mật quá số lần cho phép. Vui lòng thử lại sau 15 phút." };
+
+  // Only count failed attempts when caller attempted authentication or wrong guess was provided
+  const shouldCountFail = Boolean(provided) || options.countMissingAsFail === true;
+  if (shouldCountFail) {
+    const prevCount = rec && now - rec.firstFailAt <= SYNC_AUTH_FAIL_WINDOW_MS ? rec.count : 0;
+    const nextCount = prevCount + 1;
+    const lockedUntil = nextCount >= SYNC_AUTH_MAX_FAILURES ? now + SYNC_AUTH_FAIL_WINDOW_MS : 0;
+    failMap.set(ip, {
+      count: nextCount,
+      firstFailAt: prevCount > 0 && rec ? rec.firstFailAt : now,
+      lockedUntil
+    });
+    if (lockedUntil) {
+      return { ok: false, status: 429, error: "Nhập sai mã bí mật quá số lần cho phép. Vui lòng thử lại sau 15 phút." };
+    }
   }
-  return { ok: false, status: 401, error: "Mã bí mật đồng bộ không hợp lệ." };
+
+  return { ok: false, status: 401, error: invalidMsg };
+}
+
+function verifySyncSecretAuth(req, expectedSecret, candidateHeaders) {
+  return verifySecretWithRateLimit(req, expectedSecret, candidateHeaders, {
+    failMap: syncAuthFailByIp,
+    required: true,
+    countMissingAsFail: true,
+    missingMsg: "Chưa cấu hình biến môi trường mã bí mật trên máy chủ.",
+    invalidMsg: "Mã bí mật đồng bộ không hợp lệ."
+  });
+}
+
+function verifyAdminAuth(req) {
+  return verifySecretWithRateLimit(req, ADMIN_SECRET, ["x-admin-secret", "authorization"], {
+    failMap: adminAuthFailByIp,
+    required: false,
+    countMissingAsFail: false,
+    invalidMsg: "Cần đăng nhập để truy cập trang quản trị."
+  });
+}
+
+function requireAdminAuth(req, res) {
+  const auth = verifyAdminAuth(req);
+  if (auth.ok) return true;
+  sendJson(res, auth.status, {
+    error: auth.error,
+    requiresAdminAuth: true
+  });
+  return false;
 }
 
 async function supabaseServiceFetch(subPath, options = {}) {
@@ -707,6 +765,77 @@ function pickAtTrackingField(item, keyName) {
   return "";
 }
 
+/**
+ * Khử nhận dạng thông minh cho order_id:
+ * - Mã thuần số (VD: VietCredit 494045787): giữ nguyên.
+ * - Mã chứa chữ cái/tên (VD: TNEX nguyenminhhieu034*******): giữ 2 ký tự đầu + **** + 4 ký tự cuối phần gốc.
+ */
+function maskOrderId(rawOrderId) {
+  const raw = String(rawOrderId == null ? "" : rawOrderId).trim();
+  if (!raw) return "";
+  if (/^\d+$/.test(raw)) return raw;
+
+  const hadTrailingAsterisk = /\*+$/.test(raw);
+  const core = raw.replace(/\*+$/, "").trim();
+  if (!core) return "****";
+  // Nếu phần lõi đã được che theo mẫu (**** ở giữa), giữ nguyên để đảm bảo idempotent
+  if (core.includes("****")) return raw;
+  if (core.length <= 2) return core.charAt(0) + "****";
+  if (core.length <= 6) {
+    return core.slice(0, 2) + "****" + (hadTrailingAsterisk ? "*" : "");
+  }
+  return core.slice(0, 2) + "****" + core.slice(-4) + (hadTrailingAsterisk ? "*" : "");
+}
+
+function sanitizeTrackingForStorage(rawTracking) {
+  const t = rawTracking && typeof rawTracking === "object" ? rawTracking : {};
+  const str = (v) => (v != null && String(v).trim() !== "" ? String(v).trim() : "");
+  return {
+    sub1: str(t.sub1),
+    sub2: str(t.sub2),
+    sub3: str(t.sub3),
+    sub4: str(t.sub4),
+    utm_source: str(t.utm_source),
+    utm_medium: str(t.utm_medium),
+    utm_campaign: str(t.utm_campaign),
+    utm_content: str(t.utm_content)
+  };
+}
+
+function sanitizeStoredConversionRow(row) {
+  if (!row || typeof row !== "object") return row;
+  return {
+    ...row,
+    order_id: row.order_id != null && row.order_id !== "" ? maskOrderId(row.order_id) : "",
+    tracking: sanitizeTrackingForStorage(row.tracking)
+  };
+}
+
+function sanitizeTransactionItemForClient(rawItem) {
+  if (!rawItem || typeof rawItem !== "object") return rawItem;
+  const copy = { ...rawItem };
+  if (copy.transaction_id != null && copy.transaction_id !== "") {
+    copy.transaction_id = maskOrderId(copy.transaction_id);
+  }
+  if (copy.order_id != null && copy.order_id !== "") {
+    copy.order_id = maskOrderId(copy.order_id);
+  }
+  if (copy._extra && typeof copy._extra === "object") {
+    const cleanedExtra = sanitizeTrackingForStorage({
+      sub1: pickAtTrackingField(rawItem, "sub1"),
+      sub2: pickAtTrackingField(rawItem, "sub2"),
+      sub3: pickAtTrackingField(rawItem, "sub3"),
+      sub4: pickAtTrackingField(rawItem, "sub4"),
+      utm_source: pickAtTrackingField(rawItem, "utm_source"),
+      utm_medium: pickAtTrackingField(rawItem, "utm_medium"),
+      utm_campaign: pickAtTrackingField(rawItem, "utm_campaign"),
+      utm_content: pickAtTrackingField(rawItem, "utm_content")
+    });
+    copy._extra = cleanedExtra;
+  }
+  return copy;
+}
+
 function mapAccessTradeItemToConversionRow(item) {
   if (!item || typeof item !== "object") return null;
   const rawConvId = item.conversion_id != null && item.conversion_id !== "" ? item.conversion_id : item.id;
@@ -739,7 +868,8 @@ function mapAccessTradeItemToConversionRow(item) {
 
   const salesTime = ensureGmt7Iso(item.transaction_time || item.sales_time || item.click_time);
   const updateTime = ensureGmt7Iso(item.update_time || item.transaction_time || item.sales_time);
-  const orderId = String(item.transaction_id != null && item.transaction_id !== "" ? item.transaction_id : (item.order_id || convIdNum)).trim();
+  const rawOrderId = String(item.transaction_id != null && item.transaction_id !== "" ? item.transaction_id : (item.order_id || convIdNum)).trim();
+  const orderId = maskOrderId(rawOrderId);
   const advertiser = String(
     item.merchant ||
     item.campaign_name ||
@@ -769,8 +899,7 @@ function mapAccessTradeItemToConversionRow(item) {
       utm_source: pickAtTrackingField(item, "utm_source"),
       utm_medium: pickAtTrackingField(item, "utm_medium"),
       utm_campaign: utmCampaign,
-      utm_content: pickAtTrackingField(item, "utm_content"),
-      extra: item._extra && typeof item._extra === "object" ? item._extra : null
+      utm_content: pickAtTrackingField(item, "utm_content")
     },
     synced_at: new Date().toISOString()
   };
@@ -778,10 +907,11 @@ function mapAccessTradeItemToConversionRow(item) {
 
 async function upsertConversionsBatch(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return { ok: true, count: 0 };
+  const sanitizedRows = rows.map(sanitizeStoredConversionRow);
   let totalUpserted = 0;
   const batchSize = 200;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const chunk = rows.slice(i, i + batchSize);
+  for (let i = 0; i < sanitizedRows.length; i += batchSize) {
+    const chunk = sanitizedRows.slice(i, i + batchSize);
     const res = await supabaseServiceFetch("conversions?on_conflict=conversion_id", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates" },
@@ -800,6 +930,29 @@ async function upsertConversionsBatch(rows) {
     totalUpserted += chunk.length;
   }
   return { ok: true, count: totalUpserted };
+}
+
+async function scrubLegacyConversionsInSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return 0;
+  const res = await supabaseServiceFetch("conversions?select=*&order=sales_time.desc&limit=1000");
+  if (!res || !res.ok) return 0;
+  const rows = await res.json().catch(() => null);
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+
+  const dirtyRows = [];
+  for (const row of rows) {
+    if (!row || row.conversion_id == null) continue;
+    const rawOrderId = row.order_id != null ? String(row.order_id) : "";
+    const maskedOrderId = rawOrderId ? maskOrderId(rawOrderId) : "";
+    const rawTracking = row.tracking && typeof row.tracking === "object" ? row.tracking : {};
+    const hasExtraKey = Object.prototype.hasOwnProperty.call(rawTracking, "extra");
+    if (rawOrderId !== maskedOrderId || hasExtraKey) {
+      dirtyRows.push(sanitizeStoredConversionRow(row));
+    }
+  }
+  if (dirtyRows.length === 0) return 0;
+  const resScrub = await upsertConversionsBatch(dirtyRows);
+  return resScrub.count || 0;
 }
 
 async function enforceSharedSyncRateBudget(syncState) {
@@ -1035,6 +1188,7 @@ async function runConversionsSync({ mode = "incremental", source = "manual", wee
         const resUp = await upsertConversionsBatch(allRows);
         upsertedCount = resUp.count;
       }
+      await scrubLegacyConversionsInSupabase().catch(() => 0);
 
       const doneIso = new Date().toISOString();
       syncState.last_sync_at = doneIso;
@@ -1080,6 +1234,7 @@ async function runConversionsSync({ mode = "incremental", source = "manual", wee
         const resUp = await upsertConversionsBatch(allRows);
         upsertedCount = resUp.count;
       }
+      await scrubLegacyConversionsInSupabase().catch(() => 0);
 
       const hasMore = targetWeekIdx + 1 < weeks.length;
       const doneIso = new Date().toISOString();
@@ -1150,13 +1305,14 @@ async function getConversionsFromSupabase({ ctvRef = "", limit = 1000 } = {}) {
   if (!res || !res.ok) return null;
   const rows = await res.json().catch(() => null);
   if (!Array.isArray(rows)) return null;
-  let totalExact = rows.length;
+  const sanitizedRows = rows.map(sanitizeStoredConversionRow);
+  let totalExact = sanitizedRows.length;
   const contentRange = res.headers.get("content-range") || "";
   const mRange = contentRange.match(/\/(\d+)$/);
   if (mRange && Number.isFinite(Number(mRange[1]))) {
     totalExact = Number(mRange[1]);
   }
-  return { rows, totalInSupabase: totalExact };
+  return { rows: sanitizedRows, totalInSupabase: totalExact };
 }
 
 function readJsonBody(req, maxBytes) {
@@ -1212,6 +1368,24 @@ function readJsonBody(req, maxBytes) {
       reject(err);
     });
   });
+}
+
+async function resolveEffectiveAccessKey(req) {
+  const headerKeyRaw = req.headers["x-accesstrade-key"];
+  const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : "";
+  if (headerKey) return headerKey;
+  if (ENV_ACCESSTRADE_KEY) return ENV_ACCESSTRADE_KEY;
+  if (bridgeState.mode !== "demo") {
+    if (bridgeRuntimeKey) return bridgeRuntimeKey;
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      const dbSet = await getSettingsFromSupabase().catch(() => null);
+      if (dbSet && dbSet.accessKey) {
+        bridgeRuntimeKey = dbSet.accessKey;
+        return dbSet.accessKey;
+      }
+    }
+  }
+  return "";
 }
 
 function sendJson(res, statusCode, payload) {
@@ -2012,7 +2186,9 @@ function serveHtmlFile(res, filePath, missingMsg) {
     }
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow",
+      "Referrer-Policy": "no-referrer"
     });
     res.end(html);
   });
@@ -2392,8 +2568,12 @@ function normalizeServerRawTransaction(raw, idx) {
     sub3: pickSub(item.sub3, extra.sub3),
     sub4: pickSub(item.sub4, extra.sub4)
   };
+  const rawOrderId = String(
+    item.transaction_id != null && item.transaction_id !== "" ? item.transaction_id : (item.order_id || id)
+  ).trim();
   return {
     conversionId: id,
+    orderId: maskOrderId(rawOrderId),
     campaignName: String(campaign),
     timeRaw: String(item.transaction_time || item.sales_time || item.click_time || ""),
     commission: Number.isFinite(Number(item.commission)) ? Number(item.commission) : 0,
@@ -2410,9 +2590,10 @@ function normalizeConversionRowToLead(row) {
   const subs = row && row.tracking && typeof row.tracking === "object" ? row.tracking : {};
   const sub2 = row.sub2 != null ? String(row.sub2).trim() : (typeof subs.sub2 === "string" ? subs.sub2.trim() : "");
   const utmCampaign = row.utm_campaign != null ? String(row.utm_campaign).trim() : (typeof subs.utm_campaign === "string" ? subs.utm_campaign.trim() : "");
+  const rawOrderId = String(row.order_id || row.conversion_id || "");
   return {
     conversionId: String(row.conversion_id || ""),
-    orderId: String(row.order_id || row.conversion_id || ""),
+    orderId: maskOrderId(rawOrderId),
     orderValue: Number.isFinite(Number(row.order_value)) ? Number(row.order_value) : 0,
     campaignName: String(row.advertiser || "Sản phẩm tài chính"),
     timeRaw: String(row.sales_time || row.update_time || ""),
@@ -2433,16 +2614,24 @@ function normalizeConversionRowToLead(row) {
 function resolveServerLeadProjectKey(campaignName) {
   const campUpper = String(campaignName || "").toUpperCase();
   if (!campUpper) return "";
-  if (campUpper.includes("TNEX")) return "tnex";
+  const cfgProjects = (bridgeState.ctvLinkConfig && bridgeState.ctvLinkConfig.projects) || {};
+  const vcCampId = cfgProjects.vietcredit && cfgProjects.vietcredit.campaign ? String(cfgProjects.vietcredit.campaign).trim() : "";
+  const tnexCampId = cfgProjects.tnex && cfgProjects.tnex.campaign ? String(cfgProjects.tnex.campaign).trim() : "";
+  if (campUpper.includes("TNEX") || (tnexCampId && campUpper.includes(tnexCampId.toUpperCase()))) return "tnex";
   if (campUpper.includes("VPBANK") || campUpper.includes("VP BANK")) return "vpbank";
   if (
     campUpper.includes("VIETCREDIT") ||
+    campUpper.includes("VIET CREDIT") ||
     campUpper.includes("VCREDIT") ||
+    campUpper.includes("V_CREDIT") ||
+    campUpper.includes("V-CREDIT") ||
     campUpper.includes("TÍN VIỆT") ||
     campUpper.includes("TIN VIET") ||
     campUpper.includes("TINVAY") ||
     campUpper.includes("TIN VAY") ||
-    campUpper.includes("TIN_VAY")
+    campUpper.includes("TIN_VAY") ||
+    campUpper.includes("6997817930567730686") ||
+    (vcCampId && campUpper.includes(vcCampId.toUpperCase()))
   ) {
     return "vietcredit";
   }
@@ -2592,9 +2781,13 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
       totals.commission += ctvComm;
     }
 
-    const rawOrderId = String(lead.orderId || lead.conversionId || "").trim();
+    const hasExplicitOrderId = Boolean(lead.orderId && String(lead.orderId).trim() !== "");
+    const rawOrderId = hasExplicitOrderId
+      ? maskOrderId(String(lead.orderId).trim())
+      : String(lead.conversionId || "").trim();
+    const displayOrderId = rawOrderId.includes("****") ? rawOrderId.slice(0, 20) : rawOrderId.slice(0, 6);
     orders.push({
-      id: rawOrderId.slice(0, 6),
+      id: displayOrderId,
       campaign: String(lead.campaignName || "Sản phẩm tài chính"),
       order_value: Number.isFinite(Number(lead.orderValue)) ? Number(lead.orderValue) : 0,
       time: String(lead.timeRaw || ""),
@@ -2791,8 +2984,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqMethod === "GET" && pathname === "/api/admin/bootstrap") {
+    if (!requireAdminAuth(req, res)) return;
+
     let ctvList = bridgeState.ctvList;
     let dbSettings = null;
+    let hasAccessKeyOnServer = Boolean(ENV_ACCESSTRADE_KEY || bridgeRuntimeKey);
     try {
       const dbCtvs = await getCtvsFromSupabase();
       if (Array.isArray(dbCtvs) && dbCtvs.length > 0) {
@@ -2805,8 +3001,11 @@ const server = http.createServer(async (req, res) => {
         if (fetchedSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...fetchedSettings.policy };
         if (fetchedSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = mergeCtvLinkConfigs(bridgeState.ctvLinkConfig, fetchedSettings.ctvLinkConfig, false);
         if (fetchedSettings.ctvShortLinks) bridgeState.ctvShortLinks = { ...bridgeState.ctvShortLinks, ...fetchedSettings.ctvShortLinks };
-        if (fetchedSettings.accessKey && !bridgeRuntimeKey) {
-          bridgeRuntimeKey = fetchedSettings.accessKey;
+        if (fetchedSettings.accessKey) {
+          hasAccessKeyOnServer = true;
+          if (!bridgeRuntimeKey) {
+            bridgeRuntimeKey = fetchedSettings.accessKey;
+          }
         }
       }
       const dbClicks = await getClicksFromSupabase();
@@ -2818,16 +3017,63 @@ const server = http.createServer(async (req, res) => {
         }
       }
     } catch (_e) {}
+
+    // Tuyệt đối không trả accessKey hay mã xem bí mật (view) qua /api/admin/bootstrap
+    const sanitizedCtvList = (Array.isArray(ctvList) ? ctvList : []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      ref: c.ref,
+      active: c.active !== false
+    }));
+
+    let sanitizedSettings = null;
+    if (dbSettings && typeof dbSettings === "object") {
+      const { accessKey: _droppedKey, ctvList: _droppedCtvList, ...safeRest } = dbSettings;
+      sanitizedSettings = {
+        ...safeRest,
+        hasAccessKey: Boolean(dbSettings.accessKey || ENV_ACCESSTRADE_KEY || bridgeRuntimeKey)
+      };
+    }
+
     sendJson(res, 200, {
       ok: true,
-      ctvList,
-      settings: dbSettings,
+      adminAuthEnabled: Boolean(ADMIN_SECRET),
+      hasAccessKey: hasAccessKeyOnServer,
+      ctvList: sanitizedCtvList,
+      settings: sanitizedSettings,
       clicksByRef: buildClicksSummaryMap()
     });
     return;
   }
 
+  if (reqMethod === "GET" && pathname === "/api/admin/ctv-views") {
+    if (!requireAdminAuth(req, res)) return;
+    if (!ADMIN_SECRET) {
+      sendJson(res, 403, { error: "Cần cấu hình ADMIN_SECRET trên máy chủ để truy xuất mã xem CTV qua API." });
+      return;
+    }
+
+    let ctvList = Array.isArray(bridgeState.ctvList) ? bridgeState.ctvList : [];
+    try {
+      const dbCtvs = await getCtvsFromSupabase();
+      if (Array.isArray(dbCtvs) && dbCtvs.length > 0) {
+        ctvList = dbCtvs;
+        bridgeState.ctvList = dbCtvs;
+      }
+    } catch (_e) {}
+
+    const viewsByRef = {};
+    for (const c of ctvList) {
+      if (c && c.ref && c.view && c.active !== false) {
+        viewsByRef[String(c.ref).toLowerCase()] = String(c.view);
+      }
+    }
+    sendJson(res, 200, { ok: true, viewsByRef });
+    return;
+  }
+
   if (reqMethod === "GET" && pathname === "/api/ctv-clicks") {
+    if (!requireAdminAuth(req, res)) return;
     if (bridgeState.mode !== "demo") {
       try {
         const dbClicks = await getClicksFromSupabase();
@@ -2849,6 +3095,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqMethod === "POST" && pathname === "/api/ctv-bridge/sync") {
+    if (!requireAdminAuth(req, res)) return;
     let body;
     try {
       body = await readJsonBody(req, 524288);
@@ -2998,6 +3245,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqMethod === "POST" && pathname === "/api/ctv-bridge/delete") {
+    if (!requireAdminAuth(req, res)) return;
     let body = {};
     try {
       body = await readJsonBody(req, 16384);
@@ -3136,6 +3384,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqMethod === "GET" && pathname === "/api/conversions") {
+    if (!requireAdminAuth(req, res)) return;
     try {
       const [convResult, syncState] = await Promise.all([
         getConversionsFromSupabase({ limit: 1000 }),
@@ -3214,6 +3463,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqMethod === "GET" && pathname === "/api/transactions") {
+    if (!requireAdminAuth(req, res)) return;
     const since = parsedUrl.searchParams.get("since") || "";
     const until = parsedUrl.searchParams.get("until") || "";
 
@@ -3224,9 +3474,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const headerKeyRaw = req.headers["x-accesstrade-key"];
-    const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : "";
-    const effectiveKey = headerKey || ENV_ACCESSTRADE_KEY;
+    const effectiveKey = await resolveEffectiveAccessKey(req);
 
     if (!effectiveKey) {
       sendJson(res, 400, {
@@ -3237,11 +3485,12 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const data = await getCachedTransactions(since, until, effectiveKey);
-      if (Array.isArray(data) && data.length > 0 && bridgeState.mode !== "demo") {
-        const normalized = data.map(normalizeServerRawTransaction);
+      const sanitizedData = Array.isArray(data) ? data.map(sanitizeTransactionItemForClient) : [];
+      if (sanitizedData.length > 0 && bridgeState.mode !== "demo") {
+        const normalized = sanitizedData.map(normalizeServerRawTransaction);
         saveLeadsSnapshotToSupabase(normalized).catch(() => {});
       }
-      sendJson(res, 200, { data });
+      sendJson(res, 200, { data: sanitizedData });
     } catch (err) {
       const status = err && err.statusCode === 502 ? 502 : 502;
       const safeMessage =
@@ -3255,6 +3504,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqMethod === "POST" && pathname === "/api/create-link") {
+    if (!requireAdminAuth(req, res)) return;
     let body;
     try {
       body = await readJsonBody(req, 16384);
@@ -3289,9 +3539,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const headerKeyRaw = req.headers["x-accesstrade-key"];
-    const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : "";
-    const effectiveKey = headerKey || ENV_ACCESSTRADE_KEY;
+    const effectiveKey = await resolveEffectiveAccessKey(req);
 
     if (!effectiveKey) {
       sendJson(res, 400, {
@@ -3320,6 +3568,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqMethod === "POST" && pathname === "/api/resolve-short-link") {
+    if (!requireAdminAuth(req, res)) return;
     let body;
     try {
       body = await readJsonBody(req, 8192);
@@ -3352,6 +3601,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqMethod === "POST" && pathname === "/api/shorten-link") {
+    if (!requireAdminAuth(req, res)) return;
     let body;
     try {
       body = await readJsonBody(req, 16384);
@@ -3379,9 +3629,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const headerKeyRaw = req.headers["x-accesstrade-key"];
-    const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : "";
-    const effectiveKey = headerKey || ENV_ACCESSTRADE_KEY;
+    const effectiveKey = await resolveEffectiveAccessKey(req);
 
     try {
       const shortened = await createShortTrackingLink({
@@ -3410,10 +3658,11 @@ const server = http.createServer(async (req, res) => {
   sendJson(res, 404, { error: "Không tìm thấy đường dẫn yêu cầu." });
 });
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && require.main === module) {
   server.listen(PORT, "0.0.0.0", () => {
     console.log("Dasboard Fin đang chạy tại http://localhost:" + PORT);
   });
 }
 
+server.maskOrderId = maskOrderId;
 module.exports = server;

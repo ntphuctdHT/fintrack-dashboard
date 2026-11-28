@@ -198,15 +198,20 @@ test("ctv-view.html pure logic handles view codes, GMT+7, VND, status, XSS safet
     "&lt;script&gt;alert(1)&lt;/script&gt;"
   );
 
-  // 4b. Explicit click counts and local HTTP tracked link support
+  // 4b. Explicit click counts, local HTTP tracked link support, and preservation of smart-masked order IDs
   const withClicks = api.normalizeBridgePayload({
     name: "Minh",
     totals: { clicks: 15, clicks_today: 4 },
-    orders: [],
+    orders: [
+      { id: "ng****u034*", campaign: "tnex_vay", time: "2026-11-26T10:00:00+07:00", status: "pending" },
+      { id: "494045787", campaign: "vcredit2026", time: "2026-11-26T09:00:00+07:00", status: "approved" }
+    ],
     short_link: "http://localhost:3000/l/ab23cd45"
   });
   assert.equal(withClicks.totals.clicks, 15);
   assert.equal(withClicks.totals.clicksToday, 4);
+  assert.equal(withClicks.orders[0].id, "ng****u034*", "Smart-masked order ID must NOT be sliced to 6 chars");
+  assert.equal(withClicks.orders[1].id, "494045", "Numeric order ID remains sliced to 6 chars");
   assert.equal(withClicks.shortLink, "http://localhost:3000/l/ab23cd45");
 
   // 5. Demo payload covers 8 items and all 4 statuses totaling 1.250.000đ
