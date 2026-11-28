@@ -138,6 +138,7 @@ let bridgeState = {
     projects: {}
   },
   ctvShortLinks: {},
+  legacyViews: {},
   clickStats: {},
   policy: {
     ownerName: "Dasboard Fin",
@@ -212,6 +213,146 @@ function mergeCtvLinkConfigs(baseCfg, incomingCfg, preserveExistingProjects = tr
   };
 }
 
+function sanitizeLegacyViewsMap(rawMap) {
+  const clean = {};
+  if (!rawMap || typeof rawMap !== "object" || Array.isArray(rawMap)) return clean;
+  for (const rawRef of Object.keys(rawMap)) {
+    const refKey = String(rawRef || "").trim().toLowerCase();
+    if (!/^[a-z0-9]{4,20}$/.test(refKey)) continue;
+    const rawList = Array.isArray(rawMap[rawRef]) ? rawMap[rawRef] : [];
+    const seen = new Set();
+    const cleanCodes = [];
+    for (const rawCode of rawList) {
+      const code = String(rawCode || "").trim().toLowerCase();
+      if (!/^[a-z0-9]{10,40}$/.test(code) || seen.has(code)) continue;
+      seen.add(code);
+      cleanCodes.push(code);
+      if (cleanCodes.length >= 20) break;
+    }
+    if (cleanCodes.length > 0) {
+      clean[refKey] = cleanCodes;
+    }
+  }
+  return clean;
+}
+
+function mergeLegacyViewsMaps(baseMap, incomingMap) {
+  const base = sanitizeLegacyViewsMap(baseMap);
+  const inc = sanitizeLegacyViewsMap(incomingMap);
+  const merged = {};
+  const allRefs = new Set([...Object.keys(base), ...Object.keys(inc)]);
+  for (const refKey of allRefs) {
+    const combined = [];
+    const seen = new Set();
+    for (const code of [...(base[refKey] || []), ...(inc[refKey] || [])]) {
+      if (!seen.has(code)) {
+        seen.add(code);
+        combined.push(code);
+        if (combined.length >= 20) break;
+      }
+    }
+    if (combined.length > 0) merged[refKey] = combined;
+  }
+  return merged;
+}
+
+function addLegacyViewCode(legacyMap, ref, viewCode) {
+  const clean = sanitizeLegacyViewsMap(legacyMap);
+  const refKey = String(ref || "").trim().toLowerCase();
+  const code = String(viewCode || "").trim().toLowerCase();
+  if (!/^[a-z0-9]{4,20}$/.test(refKey) || !/^[a-z0-9]{10,40}$/.test(code)) return clean;
+  const existing = Array.isArray(clean[refKey]) ? clean[refKey] : [];
+  if (!existing.includes(code)) {
+    clean[refKey] = [code, ...existing].slice(0, 20);
+  }
+  return clean;
+}
+
+function isCodeInLegacyViews(ref, viewCodeLower, legacyMap) {
+  if (!ref || !viewCodeLower || !legacyMap || typeof legacyMap !== "object") return false;
+  const list = legacyMap[String(ref).trim().toLowerCase()];
+  return Array.isArray(list) && list.includes(String(viewCodeLower).trim().toLowerCase());
+}
+
+function sanitizeShortLinksMap(rawMap) {
+  const clean = {};
+  if (!rawMap || typeof rawMap !== "object" || Array.isArray(rawMap)) return clean;
+  for (const k of Object.keys(rawMap)) {
+    const key = String(k || "").trim();
+    if (!key) continue;
+    const item = rawMap[k];
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const shortUrl = typeof item.shortUrl === "string" ? item.shortUrl.trim() : "";
+    if (!/^https?:\/\/\S+/i.test(shortUrl)) continue;
+    clean[key] = {
+      shortUrl,
+      fullUrl: typeof item.fullUrl === "string" ? item.fullUrl.trim() : "",
+      provider: typeof item.provider === "string" ? item.provider.trim() : "",
+      providerLabel: typeof item.providerLabel === "string" ? item.providerLabel.trim() : "Link rút gọn",
+      createdAt: typeof item.createdAt === "string" ? item.createdAt : ""
+    };
+    if (item.forceUpdated === true) {
+      clean[key].forceUpdated = true;
+    }
+  }
+  return clean;
+}
+
+function stripForceFlagsFromShortLinks(rawMap) {
+  const clean = sanitizeShortLinksMap(rawMap);
+  for (const k of Object.keys(clean)) {
+    delete clean[k].forceUpdated;
+  }
+  return clean;
+}
+
+function mergeShortLinksImmutable(baseMap, incomingMap) {
+  const merged = sanitizeShortLinksMap(baseMap);
+  const inc = sanitizeShortLinksMap(incomingMap);
+  for (const k of Object.keys(inc)) {
+    const cur = merged[k];
+    const next = inc[k];
+    if (!cur || !cur.shortUrl || next.forceUpdated === true) {
+      merged[k] = { ...next };
+      delete merged[k].forceUpdated;
+    } else {
+      merged[k] = {
+        ...next,
+        shortUrl: cur.shortUrl,
+        provider: cur.provider || next.provider || "",
+        providerLabel: cur.providerLabel || next.providerLabel || "Link rút gọn",
+        createdAt: cur.createdAt || next.createdAt || ""
+      };
+      delete merged[k].forceUpdated;
+    }
+  }
+  return stripForceFlagsFromShortLinks(merged);
+}
+
+function normalizeComparableShortTargetUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || "").trim());
+    parsed.protocol = parsed.protocol.toLowerCase();
+    parsed.hostname = parsed.hostname.toLowerCase();
+    if (parsed.pathname.length > 1) {
+      parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+    }
+    parsed.hash = "";
+    return parsed.toString();
+  } catch (_e) {
+    return String(rawUrl || "").trim();
+  }
+}
+
+function normalizeComparableShortUrlOnly(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || "").trim());
+    return (parsed.hostname.toLowerCase().replace(/^www\./, "") + parsed.pathname.replace(/\/+$/, "") + parsed.search);
+  } catch (_e) {
+    return String(rawUrl || "").trim().toLowerCase().replace(/\/+$/, "");
+  }
+}
+
 function sanitizeClickStatsMap(rawMap) {
   const clean = {};
   if (!rawMap || typeof rawMap !== "object" || Array.isArray(rawMap)) return clean;
@@ -269,10 +410,8 @@ function loadBridgeStateFromDisk() {
               : "vietcredit",
           projects: sanitizeProjectsMap(parsedCfg.projects)
         },
-        ctvShortLinks:
-          parsed.ctvShortLinks && typeof parsed.ctvShortLinks === "object"
-            ? parsed.ctvShortLinks
-            : {},
+        ctvShortLinks: stripForceFlagsFromShortLinks(parsed.ctvShortLinks),
+        legacyViews: sanitizeLegacyViewsMap(parsed.legacyViews),
         clickStats: sanitizeClickStatsMap(parsed.clickStats),
         syncedLeads: Array.isArray(parsed.syncedLeads) ? parsed.syncedLeads : [],
         accessKey: typeof parsed.accessKey === "string" ? parsed.accessKey.trim() : ""
@@ -290,7 +429,8 @@ function saveBridgeStateToDisk() {
       mode: bridgeState.mode,
       ctvList: bridgeState.ctvList,
       ctvLinkConfig: bridgeState.ctvLinkConfig,
-      ctvShortLinks: bridgeState.ctvShortLinks,
+      ctvShortLinks: stripForceFlagsFromShortLinks(bridgeState.ctvShortLinks),
+      legacyViews: sanitizeLegacyViewsMap(bridgeState.legacyViews),
       clickStats: sanitizeClickStatsMap(bridgeState.clickStats),
       policy: bridgeState.policy,
       accessKey: bridgeRuntimeKey || bridgeState.accessKey || "",
@@ -1891,13 +2031,27 @@ function resolveBrandShortPrefix(projectKey) {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1, 14);
 }
 
-function buildIsGdCustomAlias(projectKey) {
+const BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+function buildIsGdCustomAlias(projectKey, seedInput = "", saltAttempt = 0) {
   const prefix = resolveBrandShortPrefix(projectKey);
   if (!prefix) return "";
   const suffixLen = prefix === "Dashboard" ? 8 : 6;
-  const suffix = crypto.randomBytes(8).toString("base64url").replace(/[^A-Za-z0-9]/g, "").slice(0, suffixLen);
-  const safeSuffix = suffix.length >= suffixLen ? suffix : crypto.randomBytes(Math.ceil(suffixLen / 2)).toString("hex").slice(0, suffixLen);
-  const combined = prefix + "_" + safeSuffix;
+  const normalizedSeed = String(seedInput || "").trim();
+  let suffix = "";
+  if (normalizedSeed && Number(saltAttempt) < 2) {
+    const hash = crypto
+      .createHash("sha256")
+      .update(`${prefix}|${normalizeComparableShortTargetUrl(normalizedSeed)}|${Number(saltAttempt) || 0}`, "utf8")
+      .digest();
+    for (let i = 0; i < suffixLen; i += 1) {
+      suffix += BASE62_ALPHABET[hash[i] % BASE62_ALPHABET.length];
+    }
+  } else {
+    const randSuffix = crypto.randomBytes(8).toString("base64url").replace(/[^A-Za-z0-9]/g, "").slice(0, suffixLen);
+    suffix = randSuffix.length >= suffixLen ? randSuffix : crypto.randomBytes(Math.ceil(suffixLen / 2)).toString("hex").slice(0, suffixLen);
+  }
+  const combined = prefix + "_" + suffix;
   return combined.slice(0, 30);
 }
 
@@ -1934,8 +2088,8 @@ async function shortenViaIsGd(fullUrl, projectKey = "") {
   const brandPrefix = resolveBrandShortPrefix(projectKey);
 
   if (brandPrefix) {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const alias = buildIsGdCustomAlias(projectKey);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const alias = buildIsGdCustomAlias(projectKey, fullUrl, attempt);
       const customEndpoint = baseEndpoint + "&shorturl=" + encodeURIComponent(alias);
       const { response, data } = await requestIsGdCreate(customEndpoint);
       if (response.ok && data && typeof data.shorturl === "string" && /^https?:\/\//i.test(data.shorturl)) {
@@ -2069,8 +2223,321 @@ function extractProjectFromTrackedUrlObj(urlObj) {
 
 function extractViewCodeFromDashboardUrlObj(urlObj) {
   if (!urlObj) return "";
-  const m = String(urlObj.pathname || "").match(/^\/(?:xem|x)\/([a-z0-9]{12,64})\/?$/i);
-  return m ? m[1] : "";
+  const m = String(urlObj.pathname || "").match(/^\/(?:xem|x)\/([a-z0-9]{10,64})\/?$/i);
+  if (m) return m[1];
+  const qCode = (urlObj.searchParams.get("c") || urlObj.searchParams.get("view") || "").trim();
+  return /^[a-z0-9]{10,64}$/i.test(qCode) ? qCode : "";
+}
+
+function extractShortTargetIdentity(rawUrl, fallbackProjectKey = "", fallbackSubValue = "") {
+  const normUrl = normalizeComparableShortTargetUrl(rawUrl);
+  try {
+    const parsed = new URL(normUrl);
+    const origin = parsed.origin.toLowerCase();
+    const viewCode = extractViewCodeFromDashboardUrlObj(parsed);
+    if (viewCode) {
+      return {
+        kind: "dashboard",
+        viewCode: viewCode.toLowerCase(),
+        projectKey: "dashboard",
+        ref: "",
+        origin,
+        normalizedUrl: normUrl
+      };
+    }
+    const bridgeRef = extractRefFromTrackedUrlObj(parsed);
+    if (bridgeRef) {
+      const bridgeProj = extractProjectFromTrackedUrlObj(parsed) || fallbackProjectKey || "vietcredit";
+      return {
+        kind: "sales_bridge",
+        viewCode: "",
+        projectKey: String(bridgeProj || "vietcredit").trim().toLowerCase(),
+        ref: bridgeRef.toLowerCase(),
+        origin,
+        normalizedUrl: normUrl
+      };
+    }
+    const atRef =
+      parsed.searchParams.get("sub2") ||
+      parsed.searchParams.get("sub1") ||
+      parsed.searchParams.get("sub3") ||
+      parsed.searchParams.get("sub4") ||
+      fallbackSubValue ||
+      "";
+    return {
+      kind: "sales_at",
+      viewCode: "",
+      projectKey: String(fallbackProjectKey || "").trim().toLowerCase(),
+      ref: String(atRef || "").trim().toLowerCase(),
+      origin,
+      normalizedUrl: normUrl
+    };
+  } catch (_e) {
+    return {
+      kind: "other",
+      viewCode: "",
+      projectKey: String(fallbackProjectKey || "").trim().toLowerCase(),
+      ref: String(fallbackSubValue || "").trim().toLowerCase(),
+      origin: "",
+      normalizedUrl: normUrl
+    };
+  }
+}
+
+function isProviderCompatibleWithCachedEntry(requestedProvider, entry, entryKey) {
+  const reqProv = String(requestedProvider || "auto").toLowerCase();
+  const entryProv = String((entry && entry.provider) || "").toLowerCase();
+  const isAtEntry = entryProv === "accesstrade" || String(entryKey || "").startsWith("short_accesstrade|");
+  if (reqProv === "accesstrade") {
+    return isAtEntry;
+  }
+  if (reqProv === "tinyurl") {
+    return entryProv === "tinyurl";
+  }
+  if (reqProv === "isgd") {
+    return !entryProv || entryProv === "isgd";
+  }
+  return true;
+}
+
+function resolveKeyTargetUrlFromEntry(entryKey, entry) {
+  if (entry && typeof entry.fullUrl === "string" && entry.fullUrl.trim()) {
+    return entry.fullUrl.trim();
+  }
+  const idx = String(entryKey || "").indexOf("|");
+  return idx >= 0 ? String(entryKey).slice(idx + 1).trim() : "";
+}
+
+function findExistingShortLinkEntry({
+  shortLinksMap,
+  fullUrl,
+  provider = "auto",
+  projectKey = "",
+  subValue = "",
+  allowRefresh = false
+}) {
+  if (allowRefresh) return null;
+  const map = shortLinksMap && typeof shortLinksMap === "object" ? shortLinksMap : {};
+  const cand = extractShortTargetIdentity(fullUrl, projectKey, subValue);
+  for (const key of Object.keys(map)) {
+    const entry = map[key];
+    if (!entry || typeof entry !== "object" || typeof entry.shortUrl !== "string") continue;
+    const shortUrlTrim = entry.shortUrl.trim();
+    if (!/^https?:\/\/\S+/i.test(shortUrlTrim)) continue;
+    if (!isProviderCompatibleWithCachedEntry(provider, entry, key)) continue;
+    const entryFull = resolveKeyTargetUrlFromEntry(key, entry);
+    if (!entryFull) continue;
+    const ent = extractShortTargetIdentity(entryFull, "", "");
+    const exactUrlMatch = ent.normalizedUrl && cand.normalizedUrl && ent.normalizedUrl === cand.normalizedUrl;
+    const sameDashView =
+      cand.kind === "dashboard" &&
+      ent.kind === "dashboard" &&
+      Boolean(cand.viewCode) &&
+      ent.viewCode === cand.viewCode;
+    const sameTrackedBridge =
+      cand.kind === "sales_bridge" &&
+      ent.kind === "sales_bridge" &&
+      Boolean(cand.ref) &&
+      ent.ref === cand.ref &&
+      ent.projectKey === cand.projectKey &&
+      ent.origin === cand.origin;
+    if (exactUrlMatch || sameDashView || sameTrackedBridge) {
+      return {
+        key,
+        entry: {
+          shortUrl: shortUrlTrim,
+          fullUrl: entryFull,
+          provider: entry.provider || (/tinyurl\.com/i.test(shortUrlTrim) ? "tinyurl" : "isgd"),
+          providerLabel: entry.providerLabel || (/is\.gd\/Dashboard_/i.test(shortUrlTrim) ? "is.gd (Dashboard)" : "Link rút gọn")
+        }
+      };
+    }
+  }
+  return null;
+}
+
+async function hydrateBridgeSettingsFromSupabase(force = false) {
+  if (bridgeState.mode === "demo" || !SUPABASE_URL || !SUPABASE_KEY) return null;
+  try {
+    const dbSettings = await getSettingsFromSupabase();
+    if (!dbSettings || typeof dbSettings !== "object") return null;
+    if (dbSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettings.policy };
+    if (dbSettings.ctvLinkConfig) {
+      bridgeState.ctvLinkConfig = mergeCtvLinkConfigs(bridgeState.ctvLinkConfig, dbSettings.ctvLinkConfig, force !== true);
+    }
+    if (dbSettings.ctvShortLinks) {
+      bridgeState.ctvShortLinks = mergeShortLinksImmutable(dbSettings.ctvShortLinks, bridgeState.ctvShortLinks);
+    }
+    if (dbSettings.legacyViews) {
+      bridgeState.legacyViews = mergeLegacyViewsMaps(dbSettings.legacyViews, bridgeState.legacyViews);
+    }
+    if (dbSettings.accessKey && !bridgeRuntimeKey) {
+      bridgeRuntimeKey = dbSettings.accessKey;
+    }
+    return dbSettings;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function persistBridgeSettingsSafe({ deleteShortKeys = [], revokeLegacyRef = "" } = {}) {
+  if (bridgeState.mode === "demo" || !SUPABASE_URL || !SUPABASE_KEY) return false;
+  try {
+    const latestDb = await getSettingsFromSupabase().catch(() => null);
+    let baseShort = latestDb && latestDb.ctvShortLinks ? sanitizeShortLinksMap(latestDb.ctvShortLinks) : {};
+    for (const delKey of deleteShortKeys) {
+      if (delKey) delete baseShort[delKey];
+    }
+    const mergedShortLinks = mergeShortLinksImmutable(baseShort, bridgeState.ctvShortLinks);
+    bridgeState.ctvShortLinks = mergedShortLinks;
+
+    let baseLegacy = latestDb && latestDb.legacyViews ? sanitizeLegacyViewsMap(latestDb.legacyViews) : {};
+    let mergedLegacy = mergeLegacyViewsMaps(baseLegacy, bridgeState.legacyViews);
+    const revokeRefLower = String(revokeLegacyRef || "").trim().toLowerCase();
+    if (revokeRefLower) {
+      delete mergedLegacy[revokeRefLower];
+    }
+    bridgeState.legacyViews = mergedLegacy;
+
+    const mergedConfig =
+      latestDb && latestDb.ctvLinkConfig
+        ? mergeCtvLinkConfigs(latestDb.ctvLinkConfig, bridgeState.ctvLinkConfig, true)
+        : bridgeState.ctvLinkConfig;
+
+    return await saveSettingsToSupabase({
+      mode: bridgeState.mode,
+      policy: bridgeState.policy && Object.keys(bridgeState.policy).length > 0 ? bridgeState.policy : (latestDb && latestDb.policy) || bridgeState.policy,
+      ctvLinkConfig: mergedConfig,
+      ctvShortLinks: mergedShortLinks,
+      legacyViews: mergedLegacy,
+      accessKey: bridgeRuntimeKey || bridgeState.accessKey || (latestDb && latestDb.accessKey) || "",
+      ctvList: Array.isArray(bridgeState.ctvList) && bridgeState.ctvList.length > 0 ? bridgeState.ctvList : ((latestDb && latestDb.ctvList) || [])
+    });
+  } catch (_e) {
+    return false;
+  }
+}
+
+async function resolveLegacyViewInput(rawInput, allowedOrigin = "") {
+  const trimmed = String(rawInput || "").trim();
+  if (!trimmed) {
+    const emptyErr = new Error("Vui lòng dán link Dashboard cũ (hoặc mã xem 24 ký tự) của CTV.");
+    emptyErr.statusCode = 400;
+    throw emptyErr;
+  }
+  if (/^[a-z0-9]{10,40}$/i.test(trimmed)) {
+    return {
+      viewCode: trimmed.toLowerCase(),
+      shortUrl: "",
+      resolvedUrl: "",
+      provider: "",
+      providerLabel: ""
+    };
+  }
+  const normalizedUrlStr = /^https?:\/\//i.test(trimmed) ? trimmed : "https://" + trimmed;
+  let parsed;
+  try {
+    parsed = new URL(normalizedUrlStr);
+  } catch (_e) {
+    const parseErr = new Error("Link Dashboard cũ không hợp lệ.");
+    parseErr.statusCode = 400;
+    throw parseErr;
+  }
+  const directCode = extractViewCodeFromDashboardUrlObj(parsed);
+  if (directCode) {
+    return {
+      viewCode: directCode.toLowerCase(),
+      shortUrl: "",
+      resolvedUrl: parsed.toString(),
+      provider: "",
+      providerLabel: ""
+    };
+  }
+
+  // Kiểm tra trong kho ctvShortLinks trước để hỗ trợ tra ngược ngay cả khi dịch vụ rút gọn gián đoạn
+  const normShortCompare = normalizeComparableShortUrlOnly(parsed.toString());
+  for (const key of Object.keys(bridgeState.ctvShortLinks || {})) {
+    const entry = bridgeState.ctvShortLinks[key];
+    if (!entry || typeof entry.shortUrl !== "string") continue;
+    if (normalizeComparableShortUrlOnly(entry.shortUrl) === normShortCompare) {
+      const targetUrl = resolveKeyTargetUrlFromEntry(key, entry);
+      try {
+        const targetObj = new URL(targetUrl);
+        const cachedCode = extractViewCodeFromDashboardUrlObj(targetObj);
+        if (cachedCode) {
+          return {
+            viewCode: cachedCode.toLowerCase(),
+            shortUrl: parsed.toString(),
+            resolvedUrl: targetObj.toString(),
+            provider: entry.provider || "isgd",
+            providerLabel: entry.providerLabel || "is.gd (Dashboard)"
+          };
+        }
+      } catch (_ignoreCacheUrl) {}
+    }
+  }
+
+  let currentUrlObj = getAllowedShortenerUrl(parsed.toString());
+  for (let hop = 0; hop < MAX_SHORTENER_HOPS; hop += 1) {
+    let response;
+    try {
+      response = await fetch(currentUrlObj.toString(), {
+        method: "GET",
+        redirect: "manual",
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          Purpose: "prefetch"
+        },
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
+      });
+    } catch (netErr) {
+      const msg =
+        netErr && netErr.name === "TimeoutError"
+          ? "Giải mã link rút gọn bị quá thời gian."
+          : "Không thể kết nối tới dịch vụ link rút gọn để kiểm tra mã cũ.";
+      const err = new Error(msg);
+      err.statusCode = 502;
+      throw err;
+    }
+    if (response.body && typeof response.body.cancel === "function") {
+      response.body.cancel().catch(() => {});
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) break;
+      const nextUrlObj = new URL(location, currentUrlObj);
+      const nextViewCode = extractViewCodeFromDashboardUrlObj(nextUrlObj);
+      if (nextViewCode) {
+        const cleanShort = parsed.toString();
+        const isTiny = /tinyurl\.com/i.test(parsed.hostname);
+        return {
+          viewCode: nextViewCode.toLowerCase(),
+          shortUrl: cleanShort,
+          resolvedUrl: nextUrlObj.toString(),
+          provider: isTiny ? "tinyurl" : "isgd",
+          providerLabel: isTiny ? "TinyURL" : "is.gd (Dashboard)"
+        };
+      }
+      if (allowedOrigin) {
+        try {
+          const allowedParsed = new URL(allowedOrigin);
+          if (nextUrlObj.origin === allowedParsed.origin) {
+            currentUrlObj = nextUrlObj;
+            continue;
+          }
+        } catch (_ignoreAllowed) {}
+      }
+      currentUrlObj = getAllowedShortenerUrl(nextUrlObj.toString());
+      continue;
+    }
+    break;
+  }
+
+  const notDashErr = new Error(
+    "Link rút gọn này không chuyển hướng tới trang Dashboard CTV (/xem/...). Hãy mở link trên trình duyệt và dán trực tiếp địa chỉ /xem/... hoặc mã xem."
+  );
+  notDashErr.statusCode = 400;
+  throw notDashErr;
 }
 
 async function createShortTrackingLink({
@@ -2081,7 +2548,8 @@ async function createShortTrackingLink({
   subField,
   subValue,
   projectKey,
-  accessKey
+  accessKey,
+  forceRefresh = false
 }) {
   let fullUrlObj;
   try {
@@ -2155,6 +2623,62 @@ async function createShortTrackingLink({
     (isDashboardViewUrl ? "dashboard" : String(projectKey || "").trim().toLowerCase()) ||
     extractProjectFromTrackedUrlObj(fullUrlObj);
 
+  // Nạp ctvShortLinks mới nhất từ Supabase trước khi tạo link mới để bảo đảm link đã tạo không bao giờ bị sinh link thứ hai
+  await hydrateBridgeSettingsFromSupabase(false);
+
+  if (!forceRefresh) {
+    const existingCached = findExistingShortLinkEntry({
+      shortLinksMap: bridgeState.ctvShortLinks,
+      fullUrl: fullUrlObj.toString(),
+      provider: normalizedProvider,
+      projectKey: effectiveProjectKey,
+      subValue,
+      allowRefresh: false
+    });
+    if (existingCached) {
+      return {
+        short_url: existingCached.entry.shortUrl,
+        provider: existingCached.entry.provider,
+        provider_label: existingCached.entry.providerLabel,
+        full_url: fullUrlObj.toString(),
+        sub_field: subField,
+        sub_value: subValue,
+        verified_tracking: true,
+        cached: true
+      };
+    }
+  }
+
+  const saveAndReturnCreated = async (resPayload, modePrefix) => {
+    const canonicalFull = resPayload.full_url || fullUrlObj.toString();
+    const storeMode = isDashboardViewUrl ? "short_auto" : modePrefix;
+    const storeKey = `${storeMode}|${canonicalFull}`;
+    const deleteKeys = [];
+    if (forceRefresh) {
+      const targetNorm = normalizeComparableShortTargetUrl(canonicalFull);
+      for (const existingKey of Object.keys(bridgeState.ctvShortLinks || {})) {
+        const ent = bridgeState.ctvShortLinks[existingKey];
+        const entTarget = resolveKeyTargetUrlFromEntry(existingKey, ent);
+        if (normalizeComparableShortTargetUrl(entTarget) === targetNorm && existingKey !== storeKey) {
+          deleteKeys.push(existingKey);
+          delete bridgeState.ctvShortLinks[existingKey];
+        }
+      }
+    }
+    bridgeState.ctvShortLinks[storeKey] = {
+      shortUrl: resPayload.short_url,
+      fullUrl: canonicalFull,
+      provider: resPayload.provider || "",
+      providerLabel: resPayload.provider_label || "Link rút gọn",
+      createdAt: new Date().toISOString(),
+      ...(forceRefresh ? { forceUpdated: true } : {})
+    };
+    saveBridgeStateToDisk();
+    await persistBridgeSettingsSafe({ deleteShortKeys: deleteKeys });
+    bridgeState.ctvShortLinks = stripForceFlagsFromShortLinks(bridgeState.ctvShortLinks);
+    return resPayload;
+  };
+
   if (normalizedProvider === "accesstrade") {
     if (isTrackedBridgeUrl || isDashboardViewUrl) {
       const atBridgeErr = new Error(
@@ -2185,7 +2709,7 @@ async function createShortTrackingLink({
       fullUrlObj,
       accessKey
     });
-    return {
+    return await saveAndReturnCreated({
       short_url: atRes.short_url,
       provider: atRes.provider,
       provider_label: atRes.provider_label,
@@ -2193,13 +2717,13 @@ async function createShortTrackingLink({
       sub_field: subField,
       sub_value: subValue,
       verified_tracking: true
-    };
+    }, "short_accesstrade");
   }
 
   if (normalizedProvider === "isgd") {
     try {
       const isgdRes = await shortenViaIsGd(fullUrlObj.toString(), effectiveProjectKey);
-      return {
+      return await saveAndReturnCreated({
         short_url: isgdRes.short_url,
         provider: isgdRes.provider,
         provider_label: isgdRes.provider_label,
@@ -2207,10 +2731,10 @@ async function createShortTrackingLink({
         sub_field: subField,
         sub_value: subValue,
         verified_tracking: true
-      };
+      }, "short_isgd");
     } catch (_isgdFallbackErr) {
       const tinyFallback = await shortenViaTinyUrl(fullUrlObj.toString());
-      return {
+      return await saveAndReturnCreated({
         short_url: tinyFallback.short_url,
         provider: tinyFallback.provider,
         provider_label: tinyFallback.provider_label,
@@ -2218,13 +2742,13 @@ async function createShortTrackingLink({
         sub_field: subField,
         sub_value: subValue,
         verified_tracking: true
-      };
+      }, "short_isgd");
     }
   }
 
   if (normalizedProvider === "tinyurl") {
     const tinyRes = await shortenViaTinyUrl(fullUrlObj.toString());
-    return {
+    return await saveAndReturnCreated({
       short_url: tinyRes.short_url,
       provider: tinyRes.provider,
       provider_label: tinyRes.provider_label,
@@ -2232,7 +2756,7 @@ async function createShortTrackingLink({
       sub_field: subField,
       sub_value: subValue,
       verified_tracking: true
-    };
+    }, "short_tinyurl");
   }
 
   // Chế độ "auto": nếu có projectKey (muốn gắn thương hiệu) hoặc là link /l/<mã> thì dùng is.gd để giữ thương hiệu/tracking; ngược lại ưu tiên shorten.asia nếu có key
@@ -2246,7 +2770,7 @@ async function createShortTrackingLink({
         fullUrlObj,
         accessKey
       });
-      return {
+      return await saveAndReturnCreated({
         short_url: atAutoRes.short_url,
         provider: atAutoRes.provider,
         provider_label: atAutoRes.provider_label,
@@ -2254,7 +2778,7 @@ async function createShortTrackingLink({
         sub_field: subField,
         sub_value: subValue,
         verified_tracking: true
-      };
+      }, "short_auto");
     } catch (_ignoreAtAutoErr) {
       // Nếu AccessTrade API lỗi hoặc không giữ sub2, fallback an toàn sang is.gd với full_url đã có sẵn sub2
     }
@@ -2262,7 +2786,7 @@ async function createShortTrackingLink({
 
   try {
     const isgdAuto = await shortenViaIsGd(fullUrlObj.toString(), effectiveProjectKey);
-    return {
+    return await saveAndReturnCreated({
       short_url: isgdAuto.short_url,
       provider: isgdAuto.provider,
       provider_label: isgdAuto.provider_label,
@@ -2270,10 +2794,10 @@ async function createShortTrackingLink({
       sub_field: subField,
       sub_value: subValue,
       verified_tracking: true
-    };
+    }, "short_auto");
   } catch (_isgdErr) {
     const tinyAuto = await shortenViaTinyUrl(fullUrlObj.toString());
-    return {
+    return await saveAndReturnCreated({
       short_url: tinyAuto.short_url,
       provider: tinyAuto.provider,
       provider_label: tinyAuto.provider_label,
@@ -2281,7 +2805,7 @@ async function createShortTrackingLink({
       sub_field: subField,
       sub_value: subValue,
       verified_tracking: true
-    };
+    }, "short_auto");
   }
 }
 
@@ -3121,7 +3645,8 @@ const server = http.createServer(async (req, res) => {
         dbSettings = fetchedSettings;
         if (fetchedSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...fetchedSettings.policy };
         if (fetchedSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = mergeCtvLinkConfigs(bridgeState.ctvLinkConfig, fetchedSettings.ctvLinkConfig, false);
-        if (fetchedSettings.ctvShortLinks) bridgeState.ctvShortLinks = { ...bridgeState.ctvShortLinks, ...fetchedSettings.ctvShortLinks };
+        if (fetchedSettings.ctvShortLinks) bridgeState.ctvShortLinks = mergeShortLinksImmutable(fetchedSettings.ctvShortLinks, bridgeState.ctvShortLinks);
+        if (fetchedSettings.legacyViews) bridgeState.legacyViews = mergeLegacyViewsMaps(fetchedSettings.legacyViews, bridgeState.legacyViews);
         if (fetchedSettings.accessKey) {
           hasAccessKeyOnServer = true;
           if (!bridgeRuntimeKey) {
@@ -3152,6 +3677,8 @@ const server = http.createServer(async (req, res) => {
       const { accessKey: _droppedKey, ctvList: _droppedCtvList, ...safeRest } = dbSettings;
       sanitizedSettings = {
         ...safeRest,
+        ctvShortLinks: stripForceFlagsFromShortLinks(bridgeState.ctvShortLinks),
+        legacyViews: sanitizeLegacyViewsMap(bridgeState.legacyViews),
         hasAccessKey: Boolean(dbSettings.accessKey || ENV_ACCESSTRADE_KEY || bridgeRuntimeKey)
       };
     }
@@ -3177,6 +3704,7 @@ const server = http.createServer(async (req, res) => {
         ctvList = dbCtvs;
         bridgeState.ctvList = dbCtvs;
       }
+      await hydrateBridgeSettingsFromSupabase(false);
       if (bridgeState.mode !== "demo") {
         const healed = await healAndPreserveCtvViews(ctvList, { targetMode: bridgeState.mode });
         ctvList = healed.list;
@@ -3193,7 +3721,160 @@ const server = http.createServer(async (req, res) => {
         viewsByRef[String(c.ref).toLowerCase()] = String(c.view);
       }
     }
-    sendJson(res, 200, { ok: true, viewsByRef });
+    sendJson(res, 200, {
+      ok: true,
+      viewsByRef,
+      legacyViewsByRef: sanitizeLegacyViewsMap(bridgeState.legacyViews)
+    });
+    return;
+  }
+
+  if (reqMethod === "POST" && pathname === "/api/admin/restore-legacy-view") {
+    if (!requireAdminAuth(req, res)) return;
+    let body;
+    try {
+      body = await readJsonBody(req, 16384);
+    } catch (readErr) {
+      sendJson(res, readErr && readErr.statusCode ? readErr.statusCode : 400, {
+        error: readErr && readErr.message ? readErr.message : "Dữ liệu khôi phục link không hợp lệ."
+      });
+      return;
+    }
+
+    const refLower = String(body.ref || "").trim().toLowerCase();
+    const oldLink = typeof body.oldLink === "string" ? body.oldLink.trim() : "";
+    const promotePrimary = body.promotePrimary !== false;
+
+    if (!/^[a-z0-9]{4,20}$/.test(refLower)) {
+      sendJson(res, 400, { error: "Mã CTV (ref) không hợp lệ." });
+      return;
+    }
+
+    if (bridgeState.mode !== "demo" && SUPABASE_URL && SUPABASE_KEY) {
+      try {
+        const dbCtvs = await getCtvsFromSupabase();
+        if (Array.isArray(dbCtvs) && dbCtvs.length > 0) {
+          bridgeState.ctvList = dbCtvs;
+        }
+        await hydrateBridgeSettingsFromSupabase(false);
+      } catch (_e) {}
+    }
+
+    const ctvIdx = (Array.isArray(bridgeState.ctvList) ? bridgeState.ctvList : []).findIndex(
+      (c) => c && String(c.ref || "").toLowerCase() === refLower
+    );
+    if (ctvIdx < 0) {
+      sendJson(res, 404, { error: "Không tìm thấy CTV với mã " + refLower + "." });
+      return;
+    }
+    const targetCtv = bridgeState.ctvList[ctvIdx];
+    if (targetCtv.active === false) {
+      sendJson(res, 400, { error: "CTV này đang nghỉ. Hãy bấm 'Cho làm lại' trước khi khôi phục link." });
+      return;
+    }
+
+    let resolved;
+    try {
+      resolved = await resolveLegacyViewInput(oldLink, resolveRequestOrigin(req));
+    } catch (resolveErr) {
+      const status = resolveErr && resolveErr.statusCode ? resolveErr.statusCode : 400;
+      sendJson(res, status, { error: resolveErr && resolveErr.message ? resolveErr.message : "Không thể giải mã link cũ." });
+      return;
+    }
+
+    const restoredCode = resolved.viewCode;
+    // Kiểm tra trùng với CTV khác
+    for (const c of bridgeState.ctvList) {
+      if (!c) continue;
+      const otherRef = String(c.ref || "").toLowerCase();
+      if (otherRef === refLower) continue;
+      if (otherRef === restoredCode || (c.view && c.view.toLowerCase() === restoredCode)) {
+        sendJson(res, 409, { error: "Mã xem này đang thuộc về CTV khác (" + (c.name || otherRef) + ")." });
+        return;
+      }
+      if (isCodeInLegacyViews(otherRef, restoredCode, bridgeState.legacyViews)) {
+        sendJson(res, 409, { error: "Mã xem này đã gắn cho CTV khác (" + (c.name || otherRef) + ")." });
+        return;
+      }
+    }
+
+    const previousPrimaryView = String(targetCtv.view || "").trim().toLowerCase();
+    let updatedLegacy = addLegacyViewCode(bridgeState.legacyViews, refLower, restoredCode);
+    if (previousPrimaryView && previousPrimaryView !== restoredCode) {
+      updatedLegacy = addLegacyViewCode(updatedLegacy, refLower, previousPrimaryView);
+    }
+    bridgeState.legacyViews = updatedLegacy;
+
+    if (promotePrimary) {
+      bridgeState.ctvList[ctvIdx] = {
+        ...targetCtv,
+        view: restoredCode
+      };
+    }
+
+    let storedShortEntry = null;
+    const reqOrigin = resolveRequestOrigin(req);
+    const fallbackOrigin =
+      (bridgeState.ctvLinkConfig && bridgeState.ctvLinkConfig.viewBase) ||
+      reqOrigin ||
+      "https://fintrack-dashboard-wine.vercel.app";
+    let targetOrigin = fallbackOrigin;
+    if (resolved.resolvedUrl) {
+      try {
+        targetOrigin = new URL(resolved.resolvedUrl).origin;
+      } catch (_ignoreOrigin) {}
+    }
+    const canonicalFullViewUrl = targetOrigin.replace(/\/+$/, "") + "/xem/" + restoredCode;
+    const deleteShortKeys = [];
+    if (resolved.shortUrl) {
+      const shortStoreKey = "short_auto|" + canonicalFullViewUrl;
+      const targetNorm = normalizeComparableShortTargetUrl(canonicalFullViewUrl);
+      for (const existingKey of Object.keys(bridgeState.ctvShortLinks || {})) {
+        const ent = bridgeState.ctvShortLinks[existingKey];
+        const entUrl = resolveKeyTargetUrlFromEntry(existingKey, ent);
+        if (normalizeComparableShortTargetUrl(entUrl) === targetNorm && existingKey !== shortStoreKey) {
+          deleteShortKeys.push(existingKey);
+          delete bridgeState.ctvShortLinks[existingKey];
+        }
+      }
+      storedShortEntry = {
+        shortUrl: resolved.shortUrl,
+        fullUrl: canonicalFullViewUrl,
+        provider: resolved.provider || "isgd",
+        providerLabel: resolved.providerLabel || "is.gd (Dashboard)",
+        createdAt: new Date().toISOString(),
+        forceUpdated: true
+      };
+      bridgeState.ctvShortLinks[shortStoreKey] = storedShortEntry;
+    }
+
+    saveBridgeStateToDisk();
+    if (bridgeState.mode !== "demo" && SUPABASE_URL && SUPABASE_KEY) {
+      await Promise.all([
+        promotePrimary ? saveCtvsToSupabase([bridgeState.ctvList[ctvIdx]], false) : Promise.resolve(true),
+        persistBridgeSettingsSafe({ deleteShortKeys })
+      ]).catch(() => {});
+    }
+    bridgeState.ctvShortLinks = stripForceFlagsFromShortLinks(bridgeState.ctvShortLinks);
+
+    sendJson(res, 200, {
+      ok: true,
+      ref: refLower,
+      restoredCode,
+      view: bridgeState.ctvList[ctvIdx].view,
+      shortUrl: resolved.shortUrl || "",
+      shortCacheKey: resolved.shortUrl ? ("short_auto|" + canonicalFullViewUrl) : "",
+      shortEntry: storedShortEntry
+        ? {
+            shortUrl: storedShortEntry.shortUrl,
+            fullUrl: storedShortEntry.fullUrl,
+            provider: storedShortEntry.provider,
+            providerLabel: storedShortEntry.providerLabel,
+            createdAt: storedShortEntry.createdAt
+          }
+        : null,
+      legacyViews: bridgeState.legacyViews[refLower] || []
+    });
     return;
   }
 
@@ -3293,12 +3974,30 @@ const server = http.createServer(async (req, res) => {
     let baseLinkCfg = bridgeState.ctvLinkConfig || {};
     const hasMemoryProjects = baseLinkCfg.projects && Object.keys(baseLinkCfg.projects).some((k) => hasProjectConfigData(baseLinkCfg.projects[k]));
 
-    // Nếu server vừa cold-start và client chưa gửi cấu hình dự án, nạp lại từ Supabase trước khi merge để tránh ghi đè rỗng
-    if (targetMode !== "demo" && !hasIncomingProjects && !hasMemoryProjects) {
-      const existingDbSettings = await getSettingsFromSupabase();
-      if (existingDbSettings && existingDbSettings.ctvLinkConfig) {
-        baseLinkCfg = mergeCtvLinkConfigs(baseLinkCfg, existingDbSettings.ctvLinkConfig, false);
+    let baseShortLinks = bridgeState.ctvShortLinks || {};
+    let baseLegacyViews = bridgeState.legacyViews || {};
+
+    // Khi đồng bộ chế độ thật, nạp settings từ Supabase để merge bất biến ctvShortLinks & legacyViews (tránh trình duyệt mất cache làm ghi đè rỗng)
+    if (targetMode !== "demo" && SUPABASE_URL && SUPABASE_KEY) {
+      const existingDbSettings = await getSettingsFromSupabase().catch(() => null);
+      if (existingDbSettings && typeof existingDbSettings === "object") {
+        if (!hasIncomingProjects && !hasMemoryProjects && existingDbSettings.ctvLinkConfig) {
+          baseLinkCfg = mergeCtvLinkConfigs(baseLinkCfg, existingDbSettings.ctvLinkConfig, false);
+        }
+        if (existingDbSettings.ctvShortLinks) {
+          baseShortLinks = mergeShortLinksImmutable(existingDbSettings.ctvShortLinks, baseShortLinks);
+        }
+        if (existingDbSettings.legacyViews) {
+          baseLegacyViews = mergeLegacyViewsMaps(existingDbSettings.legacyViews, baseLegacyViews);
+        }
       }
+    }
+
+    const mergedShortLinks = mergeShortLinksImmutable(baseShortLinks, body.ctvShortLinks);
+    let nextLegacyViews = mergeLegacyViewsMaps(baseLegacyViews, body.legacyViews);
+    const revokeLegacyRefLower = typeof body.revokeLegacyRef === "string" ? body.revokeLegacyRef.trim().toLowerCase() : "";
+    if (revokeLegacyRefLower) {
+      delete nextLegacyViews[revokeLegacyRefLower];
     }
 
     const syncCfgPayload = body.ctvLinkConfig && typeof body.ctvLinkConfig === "object"
@@ -3309,10 +4008,8 @@ const server = http.createServer(async (req, res) => {
       mode: targetMode,
       ctvList: cleanCtvList,
       ctvLinkConfig: mergeCtvLinkConfigs(baseLinkCfg, syncCfgPayload, true),
-      ctvShortLinks:
-        body.ctvShortLinks && typeof body.ctvShortLinks === "object" && !Array.isArray(body.ctvShortLinks)
-          ? body.ctvShortLinks
-          : {},
+      ctvShortLinks: mergedShortLinks,
+      legacyViews: nextLegacyViews,
       clickStats: sanitizeClickStatsMap(bridgeState.clickStats),
       policy: {
         ownerName: typeof rawPolicy.ownerName === "string" && rawPolicy.ownerName.trim() ? rawPolicy.ownerName.trim() : "Dasboard Fin",
@@ -3355,6 +4052,7 @@ const server = http.createServer(async (req, res) => {
           policy: bridgeState.policy,
           ctvLinkConfig: bridgeState.ctvLinkConfig,
           ctvShortLinks: bridgeState.ctvShortLinks,
+          legacyViews: bridgeState.legacyViews,
           accessKey: bridgeState.accessKey,
           ctvList: cleanCtvList
         })
@@ -3386,6 +4084,9 @@ const server = http.createServer(async (req, res) => {
       if (ref && bridgeState.clickStats) {
         delete bridgeState.clickStats[ref];
       }
+      if (ref && bridgeState.legacyViews) {
+        delete bridgeState.legacyViews[String(ref).toLowerCase()];
+      }
       saveBridgeStateToDisk();
       if (SUPABASE_URL && SUPABASE_KEY) {
         const delTasks = [];
@@ -3399,6 +4100,7 @@ const server = http.createServer(async (req, res) => {
           policy: bridgeState.policy,
           ctvLinkConfig: bridgeState.ctvLinkConfig,
           ctvShortLinks: bridgeState.ctvShortLinks,
+          legacyViews: bridgeState.legacyViews,
           accessKey: bridgeState.accessKey,
           ctvList: bridgeState.ctvList
         }));
@@ -3422,19 +4124,23 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    let matchedCtv = bridgeState.ctvList.find(
-      (c) => c && c.active && (
-        (c.view && c.view.toLowerCase() === viewCode) ||
-        (c.ref && c.ref.toLowerCase() === viewCode)
-      )
-    );
+    const matchCtvByViewOrLegacy = (c) =>
+      c &&
+      c.active !== false &&
+      ((c.view && c.view.toLowerCase() === viewCode) ||
+        (c.ref && c.ref.toLowerCase() === viewCode) ||
+        isCodeInLegacyViews(c.ref, viewCode, bridgeState.legacyViews));
 
-    // Đồng bộ policy, cấu hình badge toggle và danh sách CTV từ Supabase (nếu có và không ở mode demo)
+    let matchedCtv = bridgeState.ctvList.find(matchCtvByViewOrLegacy);
+
+    // Đồng bộ policy, legacyViews, cấu hình badge toggle và danh sách CTV từ Supabase (nếu có và không ở mode demo)
     if (bridgeState.mode !== "demo") {
       const dbSettings = await getSettingsFromSupabase();
       if (dbSettings) {
         if (dbSettings.policy) bridgeState.policy = { ...bridgeState.policy, ...dbSettings.policy };
         if (dbSettings.ctvLinkConfig) bridgeState.ctvLinkConfig = mergeCtvLinkConfigs(bridgeState.ctvLinkConfig, dbSettings.ctvLinkConfig, false);
+        if (dbSettings.legacyViews) bridgeState.legacyViews = mergeLegacyViewsMaps(dbSettings.legacyViews, bridgeState.legacyViews);
+        if (dbSettings.ctvShortLinks) bridgeState.ctvShortLinks = mergeShortLinksImmutable(dbSettings.ctvShortLinks, bridgeState.ctvShortLinks);
         if (dbSettings.accessKey && !bridgeRuntimeKey) {
           bridgeRuntimeKey = dbSettings.accessKey;
         }
@@ -3452,14 +4158,23 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // Nếu chưa tìm thấy trong RAM, kiểm tra lại sau khi đã nạp dbSettings
+    // Nếu chưa tìm thấy trong RAM, kiểm tra lại sau khi đã nạp dbSettings (bao gồm legacyViews)
     if (!matchedCtv) {
-      matchedCtv = bridgeState.ctvList.find(
-        (c) => c && c.active !== false && (
-          (c.view && c.view.toLowerCase() === viewCode) ||
-          (c.ref && c.ref.toLowerCase() === viewCode)
-        )
-      );
+      matchedCtv = bridgeState.ctvList.find(matchCtvByViewOrLegacy);
+    }
+
+    // Nếu khớp trong legacyViews nhưng CTV chưa nằm trong bridgeState.ctvList, tra bảng ctvs theo ref
+    if (!matchedCtv && bridgeState.legacyViews && typeof bridgeState.legacyViews === "object") {
+      for (const legacyRef of Object.keys(bridgeState.legacyViews)) {
+        if (isCodeInLegacyViews(legacyRef, viewCode, bridgeState.legacyViews)) {
+          const dbLegacyCtv = await getCtvByRefFromSupabase(legacyRef);
+          if (dbLegacyCtv && dbLegacyCtv.active) {
+            matchedCtv = dbLegacyCtv;
+            bridgeState.ctvList.push(dbLegacyCtv);
+            break;
+          }
+        }
+      }
     }
 
     // Nếu vẫn chưa thấy theo view, đọc tiếp từ bảng ctvs
@@ -3752,6 +4467,7 @@ const server = http.createServer(async (req, res) => {
         : "sub2";
     const subValue = typeof body.sub_value === "string" ? body.sub_value.trim() : "";
     const projectKey = typeof body.project_key === "string" ? body.project_key.trim().toLowerCase() : "";
+    const forceRefresh = body.force_refresh === true;
 
     if (!fullUrl) {
       sendJson(res, 400, { error: "Thiếu link bán hàng đầy đủ (full_url) để rút gọn." });
@@ -3769,7 +4485,8 @@ const server = http.createServer(async (req, res) => {
         subField,
         subValue,
         projectKey,
-        accessKey: effectiveKey
+        accessKey: effectiveKey,
+        forceRefresh
       });
       sendJson(res, 200, shortened);
     } catch (err) {

@@ -116,16 +116,25 @@ test("CTV project copy buttons (VietCredit & TNEX) shorten, copy to clipboard, f
   const vcBtn = makeMockBtn({ "data-ctv-action": "copy-project-sales", "data-project-key": "vietcredit", "data-ctv-id": "ctv1" }, "📋 Copy link VietCredit");
   const tnexBtn = makeMockBtn({ "data-ctv-action": "copy-project-sales", "data-project-key": "tnex", "data-ctv-id": "ctv1" }, "📋 Copy link TNEX (MSB)");
   const viewShortBtn = makeMockBtn({ "data-ctv-action": "copy-view-short", "data-ctv-id": "ctv1" }, "Copy link dạng rút gọn");
+  const restoreBtn = makeMockBtn({ "data-ctv-action": "restore-legacy-view", "data-ctv-id": "ctv1" }, "Khôi phục link cũ");
+  const restoreInput = makeEl("legacy-restore-input-ctv1");
+  restoreInput.value = "https://is.gd/Dashboard_VyZfdV0Q";
 
+  ctvListContainer.querySelector = (sel) => {
+    if (sel.includes("data-legacy-restore-input")) return restoreInput;
+    return null;
+  };
   ctvListContainer.querySelectorAll = (sel) => {
     if (sel.includes('data-project-key="vietcredit"')) return [vcBtn];
     if (sel.includes('data-project-key="tnex"')) return [tnexBtn];
     if (sel.includes('data-ctv-action="copy-view-short"')) return [viewShortBtn];
+    if (sel.includes('data-ctv-action="restore-legacy-view"')) return [restoreBtn];
     return [];
   };
 
   const copiedItems = [];
   const shortenRequests = [];
+  const restoreRequests = [];
   const mockStore = {};
   const mockWindow = {
     location: { protocol: "https:", origin: "https://dash.example.vn" },
@@ -137,6 +146,30 @@ test("CTV project copy buttons (VietCredit & TNEX) shorten, copy to clipboard, f
       setItem: (k, v) => { mockStore[k] = String(v); }
     },
     fetch: async (url, opts) => {
+      if (String(url).includes("/api/admin/restore-legacy-view")) {
+        const body = JSON.parse(opts.body);
+        restoreRequests.push(body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ok: true,
+            ref: body.ref,
+            restoredCode: "cgafgvy2b4r62re7ykdw9wvn",
+            view: "cgafgvy2b4r62re7ykdw9wvn",
+            shortUrl: "https://is.gd/Dashboard_VyZfdV0Q",
+            shortCacheKey: "short_auto|https://dash.example.vn/xem/cgafgvy2b4r62re7ykdw9wvn",
+            shortEntry: {
+              shortUrl: "https://is.gd/Dashboard_VyZfdV0Q",
+              fullUrl: "https://dash.example.vn/xem/cgafgvy2b4r62re7ykdw9wvn",
+              provider: "isgd",
+              providerLabel: "is.gd (Dashboard)",
+              createdAt: new Date().toISOString()
+            },
+            legacyViews: ["cgafgvy2b4r62re7ykdw9wvn", "viewcode1234567890123456"]
+          })
+        };
+      }
       if (String(url).includes("/api/shorten-link")) {
         const body = JSON.parse(opts.body);
         shortenRequests.push(body);
@@ -245,6 +278,20 @@ test("CTV project copy buttons (VietCredit & TNEX) shorten, copy to clipboard, f
   assert.match(appToast.textContent, /https:\/\/is\.gd\/Dashboard_mock77/);
   assert.match(viewShortBtn.className, /btn-copied-flash/);
   assert.equal(viewShortBtn.textContent, "✅ Đã sao chép!");
+
+  // Click restore legacy Dashboard link button
+  await ctvListContainer.trigger("click", {
+    target: { closest: (sel) => (sel === "[data-ctv-action]" ? restoreBtn : null) }
+  });
+  assert.equal(restoreRequests.length, 1);
+  assert.equal(restoreRequests[0].ref, "minh88");
+  assert.equal(restoreRequests[0].oldLink, "https://is.gd/Dashboard_VyZfdV0Q");
+  assert.equal(state.ctvList[0].view, "cgafgvy2b4r62re7ykdw9wvn");
+  assert.equal(
+    state.ctvShortLinks["short_auto|https://dash.example.vn/xem/cgafgvy2b4r62re7ykdw9wvn"].shortUrl,
+    "https://is.gd/Dashboard_VyZfdV0Q"
+  );
+  assert.match(appToast.textContent, /Đã cứu sống link Dashboard cũ/);
 });
 
 test("index.html pure logic functions work accurately (XSS, GMT+7, status, stats)", () => {
@@ -832,6 +879,7 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
 
   let lastCreateLinkPayload = null;
   let mockIsGdShouldFail = false;
+  const capturedIsGdAliases = [];
 
   const mockAtServer = http.createServer((req, res) => {
     upstreamCalls += 1;
@@ -880,6 +928,10 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
         res.end(JSON.stringify({ errorcode: 4, errormessage: "Rate limited" }));
         return;
       }
+      const requestedAlias = url.searchParams.get("shorturl") || "";
+      if (requestedAlias) {
+        capturedIsGdAliases.push(requestedAlias);
+      }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ shorturl: "https://is.gd/mock123" }));
       return;
@@ -888,6 +940,14 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     if (req.method === "GET" && url.pathname === "/api-create.php") {
       res.writeHead(200, { "Content-Type": "text/plain" });
       res.end("https://tinyurl.com/mock456");
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/Dashboard_OldMock1") {
+      res.writeHead(302, {
+        Location: "https://bridge.example.vn/xem/oldlegacycode1234567890"
+      });
+      res.end();
       return;
     }
 
@@ -1131,9 +1191,9 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     const verifyIsGdJson = await verifyIsGdRes.json();
     assert.equal(new URL(verifyIsGdJson.resolved_url).searchParams.get("sub2"), "ab23cd45");
 
-    // Mode auto when is.gd fails falls back to TinyURL
+    // Repeat call without force_refresh reuses the immutable cached is.gd link even when is.gd fails
     mockIsGdShouldFail = true;
-    const shortenAutoTiny = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
+    const shortenCachedImmutableRes = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1141,6 +1201,23 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
         provider: "auto",
         sub_field: "sub2",
         sub_value: "ab23cd45"
+      })
+    });
+    assert.equal(shortenCachedImmutableRes.status, 200);
+    const shortenCachedJson = await shortenCachedImmutableRes.json();
+    assert.equal(shortenCachedJson.short_url, "https://is.gd/mock123");
+    assert.equal(shortenCachedJson.cached, true);
+
+    // Explicit force_refresh when is.gd fails falls back to TinyURL
+    const shortenAutoTiny = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_url: fullCtvUrl,
+        provider: "auto",
+        sub_field: "sub2",
+        sub_value: "ab23cd45",
+        force_refresh: true
       })
     });
     assert.equal(shortenAutoTiny.status, 200);
@@ -1417,6 +1494,7 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     assert.equal(shortenBridgeJson.short_url, "https://is.gd/mock123");
 
     // Shortening /xem/<viewCode> produces Dashboard-branded is.gd link
+    const aliasCountBeforeDash = capturedIsGdAliases.length;
     const shortenViewRes = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1430,6 +1508,97 @@ test("server.js runs standalone without ACCESSTRADE_KEY env, accepts X-AccessTra
     const shortenViewJson = await shortenViewRes.json();
     assert.equal(shortenViewJson.short_url, "https://is.gd/mock123");
     assert.equal(shortenViewJson.provider_label, "is.gd (Dashboard)");
+    const firstDashAlias = capturedIsGdAliases[aliasCountBeforeDash];
+    assert.match(firstDashAlias, /^Dashboard_[A-Za-z0-9]{8}$/);
+
+    // Deterministic alias: force_refresh on same URL + project produces exact same shorturl alias
+    const shortenViewDetRes = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_url: "https://bridge.example.vn/xem/minhviewcode1234567890",
+        provider: "isgd",
+        project_key: "dashboard",
+        force_refresh: true
+      })
+    });
+    assert.equal(shortenViewDetRes.status, 200);
+    const secondDashAlias = capturedIsGdAliases[aliasCountBeforeDash + 1];
+    assert.equal(secondDashAlias, firstDashAlias);
+
+    // Sending /api/ctv-bridge/sync with empty ctvShortLinks preserves existing immutable short links
+    const emptyShortSyncRes = await fetch(`http://127.0.0.1:${serverPort}/api/ctv-bridge/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "demo",
+        ctvList: [
+          { id: "c1", name: "Minh", ref: "ab23cd45", view: "minhviewcode1234567890", active: true },
+          { id: "c2", name: "Hoa", ref: "ef67gh89", view: "hoaviewcode12345678901", active: true }
+        ],
+        ctvShortLinks: {},
+        leads: []
+      })
+    });
+    assert.equal(emptyShortSyncRes.status, 200);
+
+    mockIsGdShouldFail = true;
+    const afterEmptySyncShortRes = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_url: "https://bridge.example.vn/xem/minhviewcode1234567890",
+        provider: "isgd",
+        project_key: "dashboard"
+      })
+    });
+    assert.equal(afterEmptySyncShortRes.status, 200);
+    const afterEmptySyncJson = await afterEmptySyncShortRes.json();
+    assert.equal(afterEmptySyncJson.short_url, "https://is.gd/mock123");
+    assert.equal(afterEmptySyncJson.cached, true);
+    mockIsGdShouldFail = false;
+
+    // Phần A: Restore legacy Dashboard short URL -> both old & current /api/view/:code serve 200, conflict rejected 409
+    const restoreLegacyRes = await fetch(`http://127.0.0.1:${serverPort}/api/admin/restore-legacy-view`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ref: "ab23cd45",
+        oldLink: "https://is.gd/Dashboard_OldMock1",
+        promotePrimary: true
+      })
+    });
+    assert.equal(restoreLegacyRes.status, 200);
+    const restoreLegacyJson = await restoreLegacyRes.json();
+    assert.equal(restoreLegacyJson.ok, true);
+    assert.equal(restoreLegacyJson.restoredCode, "oldlegacycode1234567890");
+    assert.equal(restoreLegacyJson.view, "oldlegacycode1234567890");
+    assert.equal(restoreLegacyJson.shortUrl, "https://is.gd/Dashboard_OldMock1");
+    assert.ok(restoreLegacyJson.legacyViews.includes("oldlegacycode1234567890"));
+    assert.ok(restoreLegacyJson.legacyViews.includes("minhviewcode1234567890"));
+
+    const oldViewServeRes = await fetch(`http://127.0.0.1:${serverPort}/api/view/oldlegacycode1234567890`);
+    assert.equal(oldViewServeRes.status, 200);
+    const currentViewServeRes = await fetch(`http://127.0.0.1:${serverPort}/api/view/minhviewcode1234567890`);
+    assert.equal(currentViewServeRes.status, 200);
+
+    const conflictLegacyRes = await fetch(`http://127.0.0.1:${serverPort}/api/admin/restore-legacy-view`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ref: "ef67gh89",
+        oldLink: "oldlegacycode1234567890"
+      })
+    });
+    assert.equal(conflictLegacyRes.status, 409);
+
+    const adminViewsAfterRestoreRes = await fetch(`http://127.0.0.1:${serverPort}/api/admin/ctv-views`);
+    assert.equal(adminViewsAfterRestoreRes.status, 200);
+    const adminViewsAfterRestoreJson = await adminViewsAfterRestoreRes.json();
+    assert.ok(
+      Array.isArray(adminViewsAfterRestoreJson.legacyViewsByRef.ab23cd45) &&
+      adminViewsAfterRestoreJson.legacyViewsByRef.ab23cd45.includes("minhviewcode1234567890")
+    );
 
     const shortenBridgeAtReject = await fetch(`http://127.0.0.1:${serverPort}/api/shorten-link`, {
       method: "POST",

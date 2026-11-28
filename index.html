@@ -3491,6 +3491,7 @@
         cloudBootstrapped: false,
         ctvList: [],
         ctvShortLinks: {},
+        ctvLegacyViews: {},
         ctvClicks: {},
         shorteningCtvId: null,
         sampleShortCheck: null,
@@ -4860,6 +4861,57 @@
         return normalizeSalesLinkMode(mode) + "|" + String(fullSalesLink || "").trim();
       }
 
+      function normalizeShortTargetComparableClient(rawUrl) {
+        try {
+          var parsed = new URL(String(rawUrl || "").trim());
+          var path = parsed.pathname && parsed.pathname.length > 1
+            ? parsed.pathname.replace(/\/+$/, "")
+            : (parsed.pathname || "");
+          return parsed.protocol.toLowerCase() + "//" + parsed.hostname.toLowerCase() + (parsed.port ? ":" + parsed.port : "") + path + parsed.search;
+        } catch (_e) {
+          return String(rawUrl || "").trim();
+        }
+      }
+
+      function mergeClientShortLinksImmutable(baseMap, incomingMap) {
+        var merged = {};
+        var k;
+        var b = baseMap && typeof baseMap === "object" && !Array.isArray(baseMap) ? baseMap : {};
+        var inc = incomingMap && typeof incomingMap === "object" && !Array.isArray(incomingMap) ? incomingMap : {};
+        for (k in b) {
+          if (Object.prototype.hasOwnProperty.call(b, k) && b[k] && typeof b[k] === "object" && isValidHttpUrl(b[k].shortUrl)) {
+            merged[k] = Object.assign({}, b[k]);
+          }
+        }
+        for (k in inc) {
+          if (!Object.prototype.hasOwnProperty.call(inc, k) || !inc[k] || typeof inc[k] !== "object" || !isValidHttpUrl(inc[k].shortUrl)) {
+            continue;
+          }
+          if (!merged[k] || !isValidHttpUrl(merged[k].shortUrl) || inc[k].forceUpdated === true) {
+            merged[k] = Object.assign({}, inc[k]);
+          }
+        }
+        return merged;
+      }
+
+      function getEntryTargetUrlClient(entryKey, entry) {
+        if (entry && typeof entry.fullUrl === "string" && entry.fullUrl.trim()) {
+          return entry.fullUrl.trim();
+        }
+        var sep = String(entryKey || "").indexOf("|");
+        return sep >= 0 ? String(entryKey).slice(sep + 1).trim() : "";
+      }
+
+      function isShortModeCompatibleClient(salesLinkMode, entryKey, entry) {
+        var normMode = normalizeSalesLinkMode(salesLinkMode);
+        var entryProv = String((entry && entry.provider) || "").toLowerCase();
+        var isAt = entryProv === "accesstrade" || String(entryKey || "").indexOf("short_accesstrade|") === 0;
+        if (normMode === "short_accesstrade") return isAt;
+        if (normMode === "short_tinyurl") return entryProv === "tinyurl";
+        if (normMode === "short_isgd") return !entryProv || entryProv === "isgd";
+        return true;
+      }
+
       function getCachedCtvShortEntry(cfg, ref, shortLinksMap, subField, projectKey) {
         if (!cfg || !isShortSalesLinkMode(cfg.salesLinkMode)) return null;
         var fullSalesLink = getOutboundTrackingBaseLink(cfg, ref, subField, projectKey);
@@ -4874,6 +4926,50 @@
             provider: entry.provider || "",
             providerLabel: entry.providerLabel || "Link rút gọn"
           };
+        }
+        var normFull = normalizeShortTargetComparableClient(fullSalesLink);
+        var pKeyLower = String(projectKey || "vietcredit").trim().toLowerCase();
+        var refLower = String(ref || "").trim().toLowerCase();
+        var allKeys = Object.keys(map);
+        for (var i = 0; i < allKeys.length; i++) {
+          var candKey = allKeys[i];
+          var candEntry = map[candKey];
+          if (!candEntry || typeof candEntry !== "object" || !isValidHttpUrl(candEntry.shortUrl)) continue;
+          if (!isShortModeCompatibleClient(cfg.salesLinkMode, candKey, candEntry)) continue;
+          var candTarget = getEntryTargetUrlClient(candKey, candEntry);
+          if (!candTarget) continue;
+          if (normalizeShortTargetComparableClient(candTarget) === normFull) {
+            return {
+              cacheKey: candKey,
+              fullSalesLink: fullSalesLink,
+              shortUrl: candEntry.shortUrl,
+              provider: candEntry.provider || "",
+              providerLabel: candEntry.providerLabel || "Link rút gọn"
+            };
+          }
+          if (refLower) {
+            try {
+              var candUrlObj = new URL(candTarget);
+              var targetUrlObj = new URL(fullSalesLink);
+              var mCand = candUrlObj.pathname.match(/^\/l\/([a-z0-9_]{3,40})(?:\/([a-z0-9_-]{2,30}))?\/?$/i);
+              var mTarget = targetUrlObj.pathname.match(/^\/l\/([a-z0-9_]{3,40})(?:\/([a-z0-9_-]{2,30}))?\/?$/i);
+              if (
+                mCand &&
+                mTarget &&
+                candUrlObj.origin.toLowerCase() === targetUrlObj.origin.toLowerCase() &&
+                mCand[1].toLowerCase() === refLower &&
+                String(mCand[2] || "vietcredit").toLowerCase() === pKeyLower
+              ) {
+                return {
+                  cacheKey: candKey,
+                  fullSalesLink: fullSalesLink,
+                  shortUrl: candEntry.shortUrl,
+                  provider: candEntry.provider || "",
+                  providerLabel: candEntry.providerLabel || "Link rút gọn"
+                };
+              }
+            } catch (_ignoreCmp) {}
+          }
         }
         return null;
       }
@@ -4910,6 +5006,24 @@
             provider: entry.provider || "",
             providerLabel: entry.providerLabel || "is.gd (Dashboard)"
           };
+        }
+        var codeLower = code.toLowerCase();
+        var keys = Object.keys(map);
+        for (var i = 0; i < keys.length; i++) {
+          var k = keys[i];
+          var ent = map[k];
+          if (!ent || typeof ent !== "object" || !isValidHttpUrl(ent.shortUrl)) continue;
+          var targetStr = getEntryTargetUrlClient(k, ent);
+          var vm = String(targetStr || "").match(/\/(?:xem|x)\/([a-z0-9]{10,40})(?:[/?#]|$)/i);
+          if (vm && vm[1].toLowerCase() === codeLower) {
+            return {
+              cacheKey: k,
+              fullViewLink: fullViewLink,
+              shortUrl: ent.shortUrl,
+              provider: ent.provider || "",
+              providerLabel: ent.providerLabel || "is.gd (Dashboard)"
+            };
+          }
         }
         return null;
       }
@@ -5432,11 +5546,33 @@
 
       function saveCtvShortLinksToStorage() {
         try {
-          var keys = Object.keys(state.ctvShortLinks || {});
-          if (keys.length > 500) {
+          var map = state.ctvShortLinks || {};
+          var keys = Object.keys(map);
+          if (keys.length > 2500) {
+            var activeTokens = [];
+            for (var cIdx = 0; cIdx < (state.ctvList || []).length; cIdx++) {
+              var cItem = state.ctvList[cIdx];
+              if (!cItem) continue;
+              if (cItem.ref) activeTokens.push(String(cItem.ref).toLowerCase());
+              if (cItem.view) activeTokens.push(String(cItem.view).toLowerCase());
+            }
             var trimmed = {};
-            for (var i = keys.length - 500; i < keys.length; i++) {
-              trimmed[keys[i]] = state.ctvShortLinks[keys[i]];
+            var keptCount = 0;
+            for (var kIdx = 0; kIdx < keys.length; kIdx++) {
+              var kStr = keys[kIdx];
+              var kLower = kStr.toLowerCase();
+              var belongsActive = activeTokens.some(function (tk) { return kLower.indexOf(tk) >= 0; });
+              if (belongsActive) {
+                trimmed[kStr] = map[kStr];
+                keptCount += 1;
+              }
+            }
+            for (var rIdx = keys.length - 1; rIdx >= 0 && keptCount < 2500; rIdx--) {
+              var remKey = keys[rIdx];
+              if (!Object.prototype.hasOwnProperty.call(trimmed, remKey)) {
+                trimmed[remKey] = map[remKey];
+                keptCount += 1;
+              }
             }
             state.ctvShortLinks = trimmed;
           }
@@ -5579,6 +5715,17 @@
         return "";
       }
 
+      function buildRestoreLegacyViewEndpoint(baseUrl) {
+        var cleanBase = String(baseUrl || "").trim().replace(/\/+$/, "");
+        if (cleanBase && isValidHttpUrl(cleanBase)) {
+          return cleanBase + "/api/admin/restore-legacy-view";
+        }
+        if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+          return window.location.origin + "/api/admin/restore-legacy-view";
+        }
+        return "";
+      }
+
       function buildCtvClicksEndpoint(baseUrl) {
         var cleanBase = String(baseUrl || "").trim().replace(/\/+$/, "");
         if (cleanBase && isValidHttpUrl(cleanBase)) {
@@ -5699,10 +5846,15 @@
                   updated = true;
                 }
               }
+              if (payload.legacyViewsByRef && typeof payload.legacyViewsByRef === "object") {
+                state.ctvLegacyViews = payload.legacyViewsByRef;
+              }
               if (updated) {
                 saveCtvListToStorage();
                 renderCtvListOnly();
                 renderCtvLinkPreviewAndStatus(state.ctvLinkConfig);
+              } else if (payload.legacyViewsByRef) {
+                renderCtvListOnly();
               }
               return true;
             })
@@ -5808,6 +5960,7 @@
               body: JSON.stringify({
                 mode: state.mode,
                 replaceCtvList: Boolean(syncOptions && syncOptions.replaceCtvList),
+                revokeLegacyRef: (syncOptions && typeof syncOptions.revokeLegacyRef === "string") ? syncOptions.revokeLegacyRef : "",
                 ctvList: state.ctvList,
                 ctvLinkConfig: state.ctvLinkConfig,
                 ctvShortLinks: state.ctvShortLinks,
@@ -5936,8 +6089,12 @@
                   hasUpdates = true;
                 }
                 if (data.settings.ctvShortLinks && typeof data.settings.ctvShortLinks === "object") {
-                  state.ctvShortLinks = Object.assign({}, state.ctvShortLinks, data.settings.ctvShortLinks);
+                  state.ctvShortLinks = mergeClientShortLinksImmutable(state.ctvShortLinks, data.settings.ctvShortLinks);
                   saveCtvShortLinksToStorage();
+                  hasUpdates = true;
+                }
+                if (data.settings.legacyViews && typeof data.settings.legacyViews === "object") {
+                  state.ctvLegacyViews = data.settings.legacyViews;
                   hasUpdates = true;
                 }
               }
@@ -7877,6 +8034,17 @@
                 '</div>';
             }
 
+            var ctvLegacyList =
+              ctv.active && ctv.ref && state.ctvLegacyViews && Array.isArray(state.ctvLegacyViews[String(ctv.ref).toLowerCase()])
+                ? state.ctvLegacyViews[String(ctv.ref).toLowerCase()]
+                : [];
+            var legacyExtrasCount = 0;
+            for (var lgIdx = 0; lgIdx < ctvLegacyList.length; lgIdx++) {
+              if (ctvLegacyList[lgIdx] && ctvLegacyList[lgIdx] !== String(ctv.view || "").toLowerCase()) {
+                legacyExtrasCount += 1;
+              }
+            }
+
             html +=
               "</div>" +
               '<div class="ctv-action-section ctv-action-section-first">' +
@@ -7902,6 +8070,22 @@
                     : "")
                 : '<span class="field-hint" style="margin:0;">CTV đã nghỉ — mã xem đã thu hồi. Bấm <strong>Cho làm lại</strong> bên dưới nếu muốn cấp lại trang xem.</span>') +
               "</div>" +
+              (ctv.active
+                ? '<div class="ctv-manual-copy-box" style="margin-top:8px;">' +
+                  '<span class="field-hint" style="margin:0;font-weight:700;">🔗 Khôi phục link Dashboard cũ đã gửi cho ' +
+                  escapeHtml(ctv.name) +
+                  (legacyExtrasCount > 0 ? " (đang giữ " + legacyExtrasCount + " mã cũ hoạt động song song)" : "") +
+                  ":</span>" +
+                  '<div class="ctv-manual-copy-row">' +
+                  '<input type="text" class="text-input" data-legacy-restore-input="' +
+                  escapeHtml(ctv.id) +
+                  '" placeholder="Dán https://is.gd/Dashboard_... hoặc .../xem/..." />' +
+                  '<button type="button" class="secondary-btn" style="width:auto;min-height:36px;padding:6px 12px;" data-ctv-action="restore-legacy-view" data-ctv-id="' +
+                  escapeHtml(ctv.id) +
+                  '">Khôi phục link cũ</button>' +
+                  "</div>" +
+                  "</div>"
+                : "") +
               "</div>" +
               '<div class="ctv-action-section">' +
               '<p class="ctv-action-heading">2. Link bán hàng các dự án &amp; Tin nhắn gửi CTV</p>' +
@@ -8835,9 +9019,17 @@
             providerLabel: payload.provider_label || "Link rút gọn",
             createdAt: new Date().toISOString()
           };
+          if (requestBody && requestBody.force_refresh === true) {
+            entry.forceUpdated = true;
+          }
           state.ctvShortLinks[cacheKey] = entry;
           saveCtvShortLinksToStorage();
-          syncCtvBridgeToServer();
+          syncCtvBridgeToServer().then(function () {
+            if (state.ctvShortLinks && state.ctvShortLinks[cacheKey] && state.ctvShortLinks[cacheKey].forceUpdated) {
+              delete state.ctvShortLinks[cacheKey].forceUpdated;
+              saveCtvShortLinksToStorage();
+            }
+          });
           return {
             cacheKey: cacheKey,
             fullSalesLink: fullTargetUrl,
@@ -8848,7 +9040,7 @@
           };
         }
 
-        async function requestShortLinkFromServer(cfg, ref, subField, projectKey) {
+        async function requestShortLinkFromServer(cfg, ref, subField, projectKey, forceRefresh) {
           var pKey = String(projectKey || (cfg && cfg.defaultProject) || "vietcredit").trim().toLowerCase();
           var pCfg = getProjectConfigClient(cfg, pKey);
           var effectiveCfg = (pKey && pKey !== "vietcredit") ? pCfg : (pCfg || cfg || {});
@@ -8864,7 +9056,8 @@
             target_url: (effectiveCfg && effectiveCfg.targetUrl) || "",
             sub_field: subField,
             sub_value: ref,
-            project_key: pKey
+            project_key: pKey,
+            force_refresh: Boolean(forceRefresh)
           });
         }
 
@@ -9154,6 +9347,66 @@
               return;
             }
 
+            if (action === "restore-legacy-view") {
+              if (!targetCtv.active) {
+                showToast("warning", "CTV này đã nghỉ. Hãy bấm Cho làm lại trước khi khôi phục link cũ.");
+                return;
+              }
+              var restoreInputEl = ctvListContainer.querySelector('input[data-legacy-restore-input="' + ctvId + '"]');
+              var rawOldUrl = restoreInputEl ? String(restoreInputEl.value || "").trim() : "";
+              if (!rawOldUrl) {
+                if (restoreInputEl) restoreInputEl.focus();
+                showToast("warning", "Hãy dán link Dashboard cũ (is.gd/Dashboard_... hoặc .../xem/...) cần khôi phục.");
+                return;
+              }
+              var restoreEp = buildRestoreLegacyViewEndpoint(state.serverUrl);
+              if (!restoreEp) {
+                showToast("error", "Cần chạy qua máy chủ web để khôi phục link cũ.");
+                return;
+              }
+              var origRestoreLabel = actionBtn.textContent;
+              actionBtn.disabled = true;
+              actionBtn.textContent = "Đang khôi phục...";
+              try {
+                var restoreResp = await adminFetch(restoreEp, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Accept: "application/json" },
+                  body: JSON.stringify({
+                    ref: targetCtv.ref,
+                    oldLink: rawOldUrl,
+                    promotePrimary: true
+                  })
+                });
+                var restoreJson = await restoreResp.json().catch(function () { return null; });
+                if (!restoreResp.ok || !restoreJson || !restoreJson.ok) {
+                  throw new Error((restoreJson && restoreJson.error) || "Không thể khôi phục link cũ.");
+                }
+                if (restoreJson.view) {
+                  targetCtv.view = restoreJson.view;
+                }
+                if (Array.isArray(restoreJson.legacyViews)) {
+                  state.ctvLegacyViews[String(targetCtv.ref).toLowerCase()] = restoreJson.legacyViews;
+                }
+                if (restoreJson.shortEntry && restoreJson.shortCacheKey) {
+                  state.ctvShortLinks[restoreJson.shortCacheKey] = restoreJson.shortEntry;
+                  saveCtvShortLinksToStorage();
+                }
+                saveCtvListToStorage();
+                renderCtvListOnly();
+                renderCtvLinkPreviewAndStatus(state.ctvLinkConfig);
+                showToast(
+                  "success",
+                  "Đã cứu sống link Dashboard cũ cho " + targetCtv.name + "! Các link đã gửi trước đó dùng lại được ngay."
+                );
+              } catch (restoreErr) {
+                showToast("error", (restoreErr && restoreErr.message) ? restoreErr.message : "Không thể khôi phục link cũ.");
+              } finally {
+                actionBtn.disabled = false;
+                actionBtn.textContent = origRestoreLabel;
+              }
+              return;
+            }
+
             if (action === "copy-manual-ready") {
               var manualText = (state.manualCopyItem && state.manualCopyItem.url) || "";
               var manualInputEl = ctvListContainer.querySelector('input[data-manual-copy-input="' + ctvId + '"]');
@@ -9257,7 +9510,8 @@
                     state.ctvLinkConfig,
                     targetCtv.ref,
                     subFieldName,
-                    projKey
+                    projKey,
+                    forceRefresh
                   );
                   return { entry: created, newlyShortened: true, trackedFallback: false, configured: true };
                 } catch (shortErr) {
@@ -9351,6 +9605,13 @@
                     }
                   }
                 } else {
+                  if (action === "refresh-short") {
+                    var okRefreshShort = await openConfirmDialog(
+                      "Tạo lại link rút gọn mới",
+                      "Link rút gọn cũ của " + targetCtv.name + " đang được khóa cố định. Chỉ tạo link mới nếu bạn thật sự muốn đổi sang một địa chỉ rút gọn khác?"
+                    );
+                    if (!okRefreshShort) return;
+                  }
                   var defRes = await ensureShortForProjectKey(defaultProjectKey, action === "refresh-short");
                   existingShort = defRes.entry;
                   newlyShortened = defRes.newlyShortened;
@@ -9430,9 +9691,12 @@
               );
               if (!okRotate) return;
               state.ctvList = rotateCtvViewCode(state.ctvList, ctvId).list;
+              if (state.ctvLegacyViews && targetCtv.ref) {
+                delete state.ctvLegacyViews[String(targetCtv.ref).toLowerCase()];
+              }
               saveCtvListToStorage();
               renderCtvListOnly();
-              syncCtvBridgeToServer();
+              syncCtvBridgeToServer({ revokeLegacyRef: targetCtv.ref });
               showToast("success", "Đã đổi mã xem mới cho " + targetCtv.name + ".");
               return;
             }
