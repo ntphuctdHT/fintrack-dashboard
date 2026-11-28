@@ -106,6 +106,7 @@ test("ctv-view.html complies strictly with isolation, privacy, accessibility, an
   assert.match(CTV_VIEW_HTML, /aria-pressed="true"/);
   assert.match(CTV_VIEW_HTML, /rel="noopener noreferrer"/);
   assert.match(CTV_VIEW_HTML, /const API_BASE = "";/);
+  assert.match(CTV_VIEW_HTML, /AUTO_REFRESH_MS\s*=\s*15000/);
 });
 
 test("ctv-view.html pure logic handles view codes, GMT+7, VND, status, XSS safety, and demo data", () => {
@@ -203,14 +204,14 @@ test("ctv-view.html pure logic handles view codes, GMT+7, VND, status, XSS safet
     name: "Minh",
     totals: { clicks: 15, clicks_today: 4 },
     orders: [
-      { id: "ng****u034*", campaign: "tnex_vay", time: "2026-11-26T10:00:00+07:00", status: "pending" },
+      { id: "ng*****hieu034*******", campaign: "tnex_vay", time: "2026-11-26T10:00:00+07:00", status: "pending" },
       { id: "494045787", campaign: "vcredit2026", time: "2026-11-26T09:00:00+07:00", status: "approved" }
     ],
     short_link: "http://localhost:3000/l/ab23cd45"
   });
   assert.equal(withClicks.totals.clicks, 15);
   assert.equal(withClicks.totals.clicksToday, 4);
-  assert.equal(withClicks.orders[0].id, "ng****u034*", "Smart-masked order ID must NOT be sliced to 6 chars");
+  assert.equal(withClicks.orders[0].id, "ng*****hieu034*******", "Smart-masked TNEX order ID (21+ chars) must NOT be truncated");
   assert.equal(withClicks.orders[1].id, "494045", "Numeric order ID remains sliced to 6 chars");
   assert.equal(withClicks.shortLink, "http://localhost:3000/l/ab23cd45");
 

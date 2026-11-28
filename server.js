@@ -498,6 +498,104 @@ async function saveLeadsSnapshotToSupabase(leadsList) {
   }
 }
 
+const CTV_VIEW_CHARSET = "abcdefghjkmnpqrstuvwxyz23456789";
+
+function generateServerViewCode(usedSet) {
+  const used = usedSet || new Set();
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const bytes = crypto.randomBytes(24);
+    let out = "";
+    for (let i = 0; i < 24; i += 1) {
+      out += CTV_VIEW_CHARSET[bytes[i] % CTV_VIEW_CHARSET.length];
+    }
+    if (!used.has(out)) {
+      used.add(out);
+      return out;
+    }
+  }
+  return crypto.randomBytes(12).toString("hex");
+}
+
+async function healAndPreserveCtvViews(incomingList, { targetMode = "real" } = {}) {
+  const existingViewByRef = new Map();
+  const usedTokens = new Set();
+
+  const collectFromList = (list) => {
+    if (!Array.isArray(list)) return;
+    for (const item of list) {
+      if (!item || !item.ref) continue;
+      const r = String(item.ref).trim().toLowerCase();
+      const v = typeof item.view === "string" ? item.view.trim() : "";
+      if (r) usedTokens.add(r);
+      if (v && /^[a-z0-9]{10,40}$/i.test(v)) {
+        usedTokens.add(v.toLowerCase());
+        if (!existingViewByRef.has(r)) {
+          existingViewByRef.set(r, v);
+        }
+      }
+    }
+  };
+
+  collectFromList(bridgeState.ctvList);
+
+  if (targetMode !== "demo" && SUPABASE_URL && SUPABASE_KEY) {
+    try {
+      const [dbCtvs, dbSettings] = await Promise.all([
+        getCtvsFromSupabase().catch(() => null),
+        getSettingsFromSupabase().catch(() => null)
+      ]);
+      collectFromList(dbCtvs);
+      if (dbSettings && Array.isArray(dbSettings.ctvList)) {
+        collectFromList(dbSettings.ctvList);
+      }
+    } catch (_e) {}
+  }
+
+  let healedAny = false;
+  const result = (Array.isArray(incomingList) ? incomingList : []).map((c) => {
+    if (!c) return c;
+    const refLower = String(c.ref || "").trim().toLowerCase();
+    const isActive = c.active !== false;
+    let finalView = typeof c.view === "string" ? c.view.trim() : "";
+    if (!isActive) {
+      finalView = "";
+    } else if (!/^[a-z0-9]{10,40}$/i.test(finalView)) {
+      const preserved = existingViewByRef.get(refLower) || "";
+      if (preserved && /^[a-z0-9]{10,40}$/i.test(preserved)) {
+        finalView = preserved;
+      } else {
+        finalView = generateServerViewCode(usedTokens);
+        healedAny = true;
+      }
+    }
+    return {
+      ...c,
+      view: finalView,
+      active: isActive
+    };
+  });
+
+  return { list: result, healedAny };
+}
+
+async function getClickForRefFromSupabase(ref) {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_KEY || !ref) return null;
+    const res = await supabaseFetch(`ctv_clicks?ref=eq.${encodeURIComponent(String(ref).toLowerCase())}&select=*`);
+    if (!res || !res.ok) return null;
+    const rows = await res.json().catch(() => null);
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      total: Number(r.total) || 0,
+      byDay: r.by_day && typeof r.by_day === "object" ? r.by_day : {},
+      lastClickAt: r.last_click_at || ""
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
 async function getClicksFromSupabase() {
   try {
     const res = await supabaseFetch("ctv_clicks?select=*");
@@ -767,24 +865,33 @@ function pickAtTrackingField(item, keyName) {
 
 /**
  * Khử nhận dạng thông minh cho order_id:
- * - Mã thuần số (VD: VietCredit 494045787): giữ nguyên.
- * - Mã chứa chữ cái/tên (VD: TNEX nguyenminhhieu034*******): giữ 2 ký tự đầu + **** + 4 ký tự cuối phần gốc.
+ * - Mã thuần số (VD: VietCredit 494045787): giữ nguyên 100%, không đổi.
+ * - Mã chứa chữ cái + cụm sao cuối (VD: TNEX nguyenminhhieu034*******): giữ 2 ký tự đầu + ***** + tối đa 7 ký tự cuối phần lõi + giữ nguyên toàn bộ cụm sao gốc -> ng*****hieu034*******.
+ * - Mã chứa chữ cái không có cụm sao cuối (VD: ORD1234567890): giữ 2 ký tự đầu + ***** + 4 ký tự cuối -> OR*****7890.
  */
 function maskOrderId(rawOrderId) {
   const raw = String(rawOrderId == null ? "" : rawOrderId).trim();
   if (!raw) return "";
   if (/^\d+$/.test(raw)) return raw;
 
-  const hadTrailingAsterisk = /\*+$/.test(raw);
+  const starMatch = raw.match(/(\*+)$/);
+  const trailingStars = starMatch ? starMatch[1] : "";
   const core = raw.replace(/\*+$/, "").trim();
-  if (!core) return "****";
+  if (!core) return "*****";
   // Nếu phần lõi đã được che theo mẫu (**** ở giữa), giữ nguyên để đảm bảo idempotent
   if (core.includes("****")) return raw;
-  if (core.length <= 2) return core.charAt(0) + "****";
-  if (core.length <= 6) {
-    return core.slice(0, 2) + "****" + (hadTrailingAsterisk ? "*" : "");
+  if (core.length <= 2) return core.charAt(0) + "*****" + trailingStars;
+
+  if (trailingStars) {
+    const tailLen = Math.min(7, Math.max(0, core.length - 2));
+    const tail = tailLen > 0 ? core.slice(-tailLen) : "";
+    return core.slice(0, 2) + "*****" + tail + trailingStars;
   }
-  return core.slice(0, 2) + "****" + core.slice(-4) + (hadTrailingAsterisk ? "*" : "");
+
+  if (core.length <= 6) {
+    return core.slice(0, 2) + "*****";
+  }
+  return core.slice(0, 2) + "*****" + core.slice(-4);
 }
 
 function sanitizeTrackingForStorage(rawTracking) {
@@ -2346,10 +2453,14 @@ function recordRealClick(ref) {
   };
   bridgeState.clickStats[ref] = updated;
   saveBridgeStateToDisk();
-  if (bridgeState.mode !== "demo") {
-    recordClickInSupabase(ref).catch(() => {});
-  }
   return updated;
+}
+
+function triggerClickPersistToSupabase(ref) {
+  if (bridgeState.mode === "demo" || !SUPABASE_URL || !SUPABASE_KEY) {
+    return Promise.resolve();
+  }
+  return recordClickInSupabase(ref).catch(() => {});
 }
 
 function getClickSummaryForRef(ref) {
@@ -2667,12 +2778,21 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
   const effectiveKey = bridgeState.mode === "demo" ? "" : (bridgeRuntimeKey || ENV_ACCESSTRADE_KEY || (bridgeState && bridgeState.accessKey));
 
   if (bridgeState.mode !== "demo") {
-    // Ưu tiên đọc từ bảng public.conversions trên Supabase theo ctv_ref của đúng CTV đó
+    // Ưu tiên đọc song song conversions và lượt click thật mới nhất của đúng CTV từ Supabase (hỗ trợ realtime đa serverless instance)
     try {
-      const convResult = await getConversionsFromSupabase({ ctvRef: ctvRefLower, limit: 1000 });
+      const [convResult, dbClickEntry] = await Promise.all([
+        getConversionsFromSupabase({ ctvRef: ctvRefLower, limit: 1000 }).catch(() => null),
+        getClickForRefFromSupabase(ctv.ref).catch(() => null)
+      ]);
       if (convResult && Array.isArray(convResult.rows) && convResult.rows.length > 0) {
         loadedFromConversionsDb = true;
         sourceLeads = convResult.rows.map(normalizeConversionRowToLead);
+      }
+      if (dbClickEntry) {
+        const prevMem = bridgeState.clickStats && bridgeState.clickStats[ctv.ref];
+        if (!prevMem || dbClickEntry.total >= (prevMem.total || 0)) {
+          bridgeState.clickStats[ctv.ref] = dbClickEntry;
+        }
       }
     } catch (_convErr) {}
 
@@ -2785,7 +2905,7 @@ async function buildCtvViewPayload(ctv, reqOrigin) {
     const rawOrderId = hasExplicitOrderId
       ? maskOrderId(String(lead.orderId).trim())
       : String(lead.conversionId || "").trim();
-    const displayOrderId = rawOrderId.includes("****") ? rawOrderId.slice(0, 20) : rawOrderId.slice(0, 6);
+    const displayOrderId = rawOrderId.includes("****") ? rawOrderId.slice(0, 36) : rawOrderId.slice(0, 6);
     orders.push({
       id: displayOrderId,
       campaign: String(lead.campaignName || "Sản phẩm tài chính"),
@@ -2971,6 +3091,7 @@ const server = http.createServer(async (req, res) => {
 
     if (isRealHumanClickRequest(req)) {
       recordRealClick(matchedCtv.ref);
+      await Promise.race([triggerClickPersistToSupabase(matchedCtv.ref), sleepMs(450)]);
     }
 
     res.writeHead(302, {
@@ -3048,10 +3169,6 @@ const server = http.createServer(async (req, res) => {
 
   if (reqMethod === "GET" && pathname === "/api/admin/ctv-views") {
     if (!requireAdminAuth(req, res)) return;
-    if (!ADMIN_SECRET) {
-      sendJson(res, 403, { error: "Cần cấu hình ADMIN_SECRET trên máy chủ để truy xuất mã xem CTV qua API." });
-      return;
-    }
 
     let ctvList = Array.isArray(bridgeState.ctvList) ? bridgeState.ctvList : [];
     try {
@@ -3059,6 +3176,14 @@ const server = http.createServer(async (req, res) => {
       if (Array.isArray(dbCtvs) && dbCtvs.length > 0) {
         ctvList = dbCtvs;
         bridgeState.ctvList = dbCtvs;
+      }
+      if (bridgeState.mode !== "demo") {
+        const healed = await healAndPreserveCtvViews(ctvList, { targetMode: bridgeState.mode });
+        ctvList = healed.list;
+        bridgeState.ctvList = healed.list;
+        if (healed.healedAny && SUPABASE_URL && SUPABASE_KEY) {
+          saveCtvsToSupabase(ctvList, false).catch(() => {});
+        }
       }
     } catch (_e) {}
 
@@ -3113,7 +3238,7 @@ const server = http.createServer(async (req, res) => {
       bridgeRuntimeKey = "";
     }
 
-    const cleanCtvList = [];
+    const cleanCtvListRaw = [];
     if (Array.isArray(body.ctvList)) {
       for (const c of body.ctvList) {
         if (!c || typeof c !== "object") continue;
@@ -3121,7 +3246,7 @@ const server = http.createServer(async (req, res) => {
         const view = typeof c.view === "string" ? c.view.trim() : "";
         const name = typeof c.name === "string" ? c.name.trim().slice(0, 40) : "";
         if (!name || !/^[a-z0-9]{4,20}$/.test(ref)) continue;
-        cleanCtvList.push({
+        cleanCtvListRaw.push({
           id: String(c.id || ref),
           name,
           ref,
@@ -3130,6 +3255,10 @@ const server = http.createServer(async (req, res) => {
         });
       }
     }
+
+    const targetModePre = body.mode === "demo" ? "demo" : "real";
+    const healedCtvResult = await healAndPreserveCtvViews(cleanCtvListRaw, { targetMode: targetModePre });
+    const cleanCtvList = healedCtvResult.list;
 
     const rawCfg = body.ctvLinkConfig && typeof body.ctvLinkConfig === "object" ? body.ctvLinkConfig : {};
     const rawPolicy = body.policy && typeof body.policy === "object" ? body.policy : {};

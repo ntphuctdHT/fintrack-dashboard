@@ -1492,16 +1492,26 @@ test("Security Method 3: ADMIN_SECRET locks admin APIs, bootstrap never leaks ac
 
   const modServer = (await import("../server.js")).default;
   assert.equal(typeof modServer.maskOrderId, "function");
-  assert.equal(modServer.maskOrderId("494045787"), "494045787");
-  assert.equal(modServer.maskOrderId("nguyenminhhieu034*******"), "ng****u034*");
-  assert.equal(modServer.maskOrderId("ng****u034*"), "ng****u034*");
-  assert.equal(modServer.maskOrderId("ORD1234567890"), "OR****7890");
-  assert.equal(modServer.maskOrderId("Nguyen Van A"), "Ng****an A");
+  assert.equal(modServer.maskOrderId("494045787"), "494045787", "VietCredit numeric ID must stay unchanged");
+  assert.equal(modServer.maskOrderId("nguyenminhhieu034*******"), "ng*****hieu034*******");
+  assert.equal(modServer.maskOrderId("ng*****hieu034*******"), "ng*****hieu034*******");
+  assert.equal(modServer.maskOrderId("an091*******"), "an*****091*******");
+  assert.equal(modServer.maskOrderId("ORD1234567890"), "OR*****7890");
+  assert.equal(modServer.maskOrderId("Nguyen Van A"), "Ng*****an A");
   assert.equal(modServer.maskOrderId(""), "");
 
   const mockSupabase = http.createServer((req, res) => {
     const reqUrl = new URL(req.url || "/", "http://127.0.0.1");
     const p = reqUrl.pathname;
+    if (p.includes("ctv_clicks")) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify([
+          { ref: "minh88", total: 17, by_day: {}, last_click_at: "2026-11-28T09:00:00Z" }
+        ])
+      );
+      return;
+    }
     if (p.includes("ctvs")) {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
@@ -1643,7 +1653,8 @@ test("Security Method 3: ADMIN_SECRET locks admin APIs, bootstrap never leaks ac
     assert.equal(viewPayloadText.includes(SECRET_AT_KEY), false);
     assert.equal(viewPayloadText.includes("nguyenminhhieu"), false, "Raw order_id PII must NEVER leak on /api/view");
     const viewPayload = JSON.parse(viewPayloadText);
-    assert.equal(viewPayload.orders[0].id, "ng****u034*");
+    assert.equal(viewPayload.orders[0].id, "ng*****hieu034*******");
+    assert.equal(viewPayload.totals.clicks, 17, "CTV view must load realtime clicks directly from Supabase ctv_clicks");
     const redirRes = await fetch(base + "/l/minh88", { redirect: "manual" });
     assert.equal(redirRes.status, 302);
     assert.match(redirRes.headers.get("location") || "", /sub2=minh88/);
@@ -1679,7 +1690,7 @@ test("Security Method 3: ADMIN_SECRET locks admin APIs, bootstrap never leaks ac
     assert.equal(convText.includes("nguyenminhhieu"), false);
     assert.equal(convText.includes("0341234567"), false);
     const convJson = JSON.parse(convText);
-    assert.equal(convJson.rows[0].order_id, "ng****u034*");
+    assert.equal(convJson.rows[0].order_id, "ng*****hieu034*******");
     assert.equal("extra" in convJson.rows[0].tracking, false);
 
     // 6. Brute-force protection locks after 5 invalid admin guesses

@@ -298,16 +298,16 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
 
     const rowTnex = conversionsDb.get("900123458");
     assert.ok(rowTnex);
-    assert.equal(rowTnex.order_id, "ng****u034*", "PII TNEX order_id must be smart-masked before DB write");
+    assert.equal(rowTnex.order_id, "ng*****hieu034*******", "PII TNEX order_id must use ng*****hieu034******* smart masking before DB write");
     assert.equal("extra" in rowTnex.tracking, false);
 
     const rowOther = conversionsDb.get("900123457");
     assert.ok(rowOther);
-    assert.equal(rowOther.order_id, "OR****7890", "Alphanumeric order_id must be smart-masked");
+    assert.equal(rowOther.order_id, "OR*****7890", "Alphanumeric order_id must use 5-star smart masking");
 
     const rowLegacy = conversionsDb.get("900123400");
     assert.ok(rowLegacy);
-    assert.equal(rowLegacy.order_id, "tr****h098*", "Legacy Supabase row must be scrubbed during sync");
+    assert.equal(rowLegacy.order_id, "tr*****bich098*******", "Legacy Supabase row must be scrubbed during sync");
     assert.equal("extra" in rowLegacy.tracking, false, "Legacy tracking.extra must be removed during sync");
 
     // Verify sync_state lock released and rate budget saved
@@ -384,7 +384,21 @@ test("Conversions sync engine handles secrets, rate limits, retries, upsert mapp
     assert.equal(byCamp["vcredit2026"].id, "494045", "Numeric order ID truncated to 6 chars on CTV view");
     assert.equal(byCamp["vcredit2026"].order_value, 25000000);
     assert.equal(byCamp["vcredit2026"].commission, undefined, "Order commission must be omitted on CTV payload");
-    assert.equal(byCamp["tnex_vay"].id, "ng****u034*", "Smart-masked ID stays intact so CTV can recognize customer");
+    assert.equal(byCamp["tnex_vay"].id, "ng*****hieu034*******", "Full smart-masked TNEX ID stays intact so CTV can recognize customer");
+
+    // G2. Verify /api/ctv-bridge/sync preserves existing CTV view code if client sends empty view while active, and /api/admin/ctv-views works
+    await fetch(`http://127.0.0.1:${serverPort}/api/ctv-bridge/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "real",
+        ctvList: [{ id: "c1", name: "Minh", ref: "minh88", view: "", active: true }]
+      })
+    });
+    const viewsNoAuthRes = await fetch(`http://127.0.0.1:${serverPort}/api/admin/ctv-views`);
+    assert.equal(viewsNoAuthRes.status, 200);
+    const viewsNoAuthJson = await viewsNoAuthRes.json();
+    assert.equal(viewsNoAuthJson.viewsByRef.minh88, "minhviewcode99887766", "Active CTV view_code must NEVER be wiped out by empty view sync");
 
     // H. Brute-force protection (5 failed attempts -> 429, blocks subsequent valid attempt)
     for (let k = 0; k < 5; k += 1) {

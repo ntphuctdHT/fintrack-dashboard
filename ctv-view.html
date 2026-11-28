@@ -1293,7 +1293,7 @@
         "Đối soát và thanh toán vào ngày 18 và 25 hằng tháng, mốc có thể khác theo chiến dịch";
       var VN_TIMEZONE = "Asia/Ho_Chi_Minh";
       var PAGE_SIZE = 10;
-      var AUTO_REFRESH_MS = 60000;
+      var AUTO_REFRESH_MS = 15000;
       var VIEW_CODE_REGEX = /^[a-z0-9]{10,40}$/;
 
       var state = {
@@ -1499,7 +1499,7 @@
 
           var rawOrderId = item.id != null ? String(item.id).trim() : String(i + 1);
           orders.push({
-            id: rawOrderId.indexOf("****") !== -1 ? rawOrderId.slice(0, 20) : rawOrderId.slice(0, 6),
+            id: rawOrderId.indexOf("****") !== -1 ? rawOrderId.slice(0, 36) : rawOrderId.slice(0, 6),
             campaign:
               typeof item.campaign === "string" && item.campaign.trim()
                 ? item.campaign.trim()
@@ -2234,6 +2234,14 @@
         if (document && typeof document.addEventListener === "function") {
           document.addEventListener("visibilitychange", function () {
             if (document.visibilityState === "visible" && !state.loading && state.errorKind !== "invalid") {
+              loadViewData();
+            }
+          });
+        }
+
+        if (typeof window.addEventListener === "function") {
+          window.addEventListener("focus", function () {
+            if (!state.loading && state.errorKind !== "invalid") {
               loadViewData();
             }
           });

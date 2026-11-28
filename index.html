@@ -5674,7 +5674,7 @@
 
       function fetchAdminCtvViews() {
         try {
-          if (!state.adminAuthRequired || !getSessionAdminSecret()) return Promise.resolve(false);
+          if (state.adminAuthRequired && !getSessionAdminSecret()) return Promise.resolve(false);
           var proto = window.location && window.location.protocol;
           if (proto !== "http:" && proto !== "https:") return Promise.resolve(false);
           var baseUrl = state.serverUrl ? state.serverUrl.replace(/\/+$/, "") : window.location.origin;
@@ -5702,6 +5702,7 @@
               if (updated) {
                 saveCtvListToStorage();
                 renderCtvListOnly();
+                renderCtvLinkPreviewAndStatus(state.ctvLinkConfig);
               }
               return true;
             })
@@ -7881,23 +7882,25 @@
               '<div class="ctv-action-section ctv-action-section-first">' +
               '<p class="ctv-action-heading">1. Trang xem hồ sơ của CTV (Dashboard)</p>' +
               '<div class="ctv-actions-grid">' +
-              (ctvViewLink
-                ? '<a class="primary-btn" data-ctv-open-view="' +
-                escapeHtml(ctv.id) +
-                '" href="' +
-                escapeHtml(ctvViewLink) +
-                '" target="_blank" rel="noopener noreferrer">Mở dashboard của ' +
-                escapeHtml(ctv.name) +
-                "</a>"
-                : "") +
-              '<button type="button" class="secondary-btn" data-ctv-action="copy-view" data-ctv-id="' +
-              escapeHtml(ctv.id) +
-              '">Sao chép link xem dashboard</button>' +
-              (ctvViewLinkShort
-                ? '<button type="button" class="secondary-btn" data-ctv-action="copy-view-short" data-ctv-id="' +
+              (ctv.active
+                ? (ctvViewLink
+                    ? '<a class="primary-btn" data-ctv-open-view="' +
+                      escapeHtml(ctv.id) +
+                      '" href="' +
+                      escapeHtml(ctvViewLink) +
+                      '" target="_blank" rel="noopener noreferrer">Mở dashboard của ' +
+                      escapeHtml(ctv.name) +
+                      "</a>"
+                    : "") +
+                  '<button type="button" class="secondary-btn" data-ctv-action="copy-view" data-ctv-id="' +
                   escapeHtml(ctv.id) +
-                  '">Copy link dạng rút gọn</button>'
-                : '') +
+                  '">Sao chép link xem dashboard</button>' +
+                  (ctvViewLinkShort
+                    ? '<button type="button" class="secondary-btn" data-ctv-action="copy-view-short" data-ctv-id="' +
+                      escapeHtml(ctv.id) +
+                      '">Copy link dạng rút gọn</button>'
+                    : "")
+                : '<span class="field-hint" style="margin:0;">CTV đã nghỉ — mã xem đã thu hồi. Bấm <strong>Cho làm lại</strong> bên dưới nếu muốn cấp lại trang xem.</span>') +
               "</div>" +
               "</div>" +
               '<div class="ctv-action-section">' +
@@ -9656,25 +9659,42 @@
           });
         }
 
+        function refreshAdminRealtimeData() {
+          if (state.adminAuthRequired && !state.adminAuthenticated) return;
+          fetchCtvClicksFromServer();
+          if (state.mode === "real" && !state.loading && !state.syncRunning) {
+            loadConversionsFromSupabase().then(function (dbRes) {
+              if (dbRes && dbRes.available && Array.isArray(dbRes.rows)) {
+                state.leads = normalizeAndSortLeads(dbRes.rows);
+                if (!state.editingLeadId) {
+                  renderOverview();
+                  renderLeads();
+                  renderCtvListOnly();
+                }
+              }
+            }).catch(function () {});
+          }
+        }
+
         if (document && typeof document.addEventListener === "function") {
           document.addEventListener("visibilitychange", function () {
             if (document.visibilityState === "visible") {
-              fetchCtvClicksFromServer();
+              refreshAdminRealtimeData();
             }
           });
         }
         if (window && typeof window.addEventListener === "function") {
           window.addEventListener("focus", function () {
-            fetchCtvClicksFromServer();
+            refreshAdminRealtimeData();
           });
         }
         if (window && typeof window.setInterval === "function") {
           window.setInterval(function () {
             if (
               document.visibilityState === "visible" &&
-              (state.activeTab === "overview" || state.activeTab === "ctv")
+              (state.activeTab === "overview" || state.activeTab === "leads" || state.activeTab === "ctv" || state.activeTab === "ctv-list")
             ) {
-              fetchCtvClicksFromServer();
+              refreshAdminRealtimeData();
             }
           }, 30000);
         }
